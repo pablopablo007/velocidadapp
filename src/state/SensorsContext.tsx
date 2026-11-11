@@ -2,7 +2,9 @@ import * as Location from 'expo-location';
 import { Barometer, DeviceMotion } from 'expo-sensors';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import { LongitudinalEstimator } from '@/services/longitudinal';
 import { reportMotion, reportPressure } from '@/services/sensorHub';
+import { liveLatG, liveLongG, liveSpeedMs } from '@/state/liveMotion';
 import { useTracking } from '@/state/TrackingContext';
 
 /**
@@ -32,6 +34,12 @@ export type SensorsState = {
     yawRateDps: number;
     /** Módulo de la aceleración que siente el teléfono, sin gravedad, en g. */
     accelG: number;
+    /** Aceleración longitudinal en g (acelerómetro + GPS). Positiva = acelerando. */
+    longG: number;
+    /** `true` si ya se calibró la dirección de avance y manda el acelerómetro. */
+    longCalibrated: boolean;
+    /** Avance de esa calibración, de 0 a 1. */
+    longCalProgress: number;
   };
   baro: {
     status: SensorStatus;
@@ -46,7 +54,15 @@ export type SensorsState = {
 };
 
 const INITIAL: SensorsState = {
-  motion: { status: 'buscando', lateralG: 0, yawRateDps: 0, accelG: 0 },
+  motion: {
+    status: 'buscando',
+    lateralG: 0,
+    yawRateDps: 0,
+    accelG: 0,
+    longG: 0,
+    longCalibrated: false,
+    longCalProgress: 0,
+  },
   baro: { status: 'buscando', pressureHpa: null },
   compass: { status: 'buscando', headingDeg: null, accuracyDeg: null },
 };
@@ -65,9 +81,21 @@ export function SensorsProvider({ children }: { children: React.ReactNode }) {
   const speedMs = useRef(0);
   const yawSmooth = useRef(0);
 
+  const [estimator] = useState(() => ({ current: new LongitudinalEstimator() }));
+
+  // Cada lectura nueva del GPS: actualiza la velocidad y le da al estimador
+  // de aceleración su referencia de un segundo.
   useEffect(() => {
-    speedMs.current = Math.max(0, live.speedKmh / 3.6);
-  }, [live.speedKmh]);
+    const v = Math.max(0, live.speedKmh / 3.6);
+    speedMs.current = v;
+    liveSpeedMs.set(v);
+    estimator.current?.pushGps(Date.now(), v);
+    if (latest.current.motion.status !== 'activo') {
+      // Sin acelerómetro, el anillo sigue vivo con la aceleración del GPS.
+      liveLongG.set(estimator.current?.valueG ?? 0);
+    }
+    // pointCount cambia con cada lectura aunque la velocidad sea la misma.
+  }, [live.speedKmh, live.pointCount, estimator]);
 
   // ---------------------------------------------------- giroscopio y acelerómetro
   useEffect(() => {
@@ -80,7 +108,9 @@ export function SensorsProvider({ children }: { children: React.ReactNode }) {
         latest.current = { ...latest.current, motion: { ...latest.current.motion, status: 'no-disponible' } };
         return;
       }
-      DeviceMotion.setUpdateInterval(50);
+      // 60 lecturas por segundo: los relojes animados las interpolan hasta los
+      // cuadros por segundo de la pantalla.
+      DeviceMotion.setUpdateInterval(16);
       sub = DeviceMotion.addListener((m) => {
         const acc = m.acceleration;
         const inc = m.accelerationIncludingGravity;
@@ -98,7 +128,7 @@ export function SensorsProvider({ children }: { children: React.ReactNode }) {
         // El giro alrededor de "abajo" es positivo en sentido horario visto
         // desde arriba, igual que el rumbo del GPS.
         const yaw = (rr.gamma * gx + rr.beta * gy + rr.alpha * gz) / gn;
-        yawSmooth.current = yawSmooth.current * 0.8 + yaw * 0.2;
+        yawSmooth.current = yawSmooth.current * 0.92 + yaw * 0.08;
 
         // Por debajo de ~5 km/h el giro no es una curva: es mover el teléfono.
         // Para el motor de cálculo: ¿el teléfono está en calma absoluta?
@@ -107,13 +137,29 @@ export function SensorsProvider({ children }: { children: React.ReactNode }) {
         const v = speedMs.current;
         const lateralG = v > 1.4 ? (v * yawSmooth.current * (Math.PI / 180)) / G : 0;
 
+        const lat = Math.max(-1.5, Math.min(1.5, lateralG));
+
+        // Aceleración longitudinal: acelerómetro proyectado sobre la dirección
+        // de avance, que se calibra sola contra el GPS.
+        const est = estimator.current!;
+        est.pushMotion(acc, { x: gx, y: gy, z: gz }, yaw);
+        // Parado no hay aceleración que mostrar: lo que quede es el teléfono moviéndose.
+        const long = v > 0.4 || Math.abs(est.valueG) > 0.05 ? est.valueG : 0;
+
+        // Directo al hilo de interfaz, sin esperar a React.
+        liveLatG.set(lat);
+        liveLongG.set(long);
+
         latest.current = {
           ...latest.current,
           motion: {
             status: 'activo',
             yawRateDps: yawSmooth.current,
-            lateralG: Math.max(-1.5, Math.min(1.5, lateralG)),
+            lateralG: lat,
             accelG: Math.hypot(acc.x, acc.y, acc.z) / G,
+            longG: long,
+            longCalibrated: est.calibrated,
+            longCalProgress: est.progress,
           },
         };
       });
@@ -122,7 +168,7 @@ export function SensorsProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       sub?.remove();
     };
-  }, []);
+  }, [estimator]);
 
   // ---------------------------------------------------------------- barómetro
   useEffect(() => {

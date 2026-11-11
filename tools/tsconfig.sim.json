@@ -17,6 +17,7 @@
   "include": [
     "../src/services/tripEngine.ts",
     "../src/services/speedStats.ts",
+    "../src/services/longitudinal.ts",
     "../src/utils/geo.ts",
     "../src/utils/format.ts",
     "../src/utils/altitude.ts",

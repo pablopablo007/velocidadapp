@@ -357,5 +357,79 @@ function makeFix(tSec, northM, speedMs, altitude, accuracy = 5) {
   check('termina detenido', e.stats(T0 + 10000).speedKmh, 0, 0);
 }
 
+// --------------------------------------- 13. aceleración con el acelerómetro
+{
+  console.log('\n— Acelerómetro + GPS: teléfono inclinado y girado en el soporte —');
+  const { LongitudinalEstimator } = require(path.join(BUILD, 'services/longitudinal.js'));
+  const est = new LongitudinalEstimator();
+
+  // Teléfono en una posición cualquiera: rotación fija carro → teléfono.
+  const rot = (v, ax, ang) => {
+    const c = Math.cos(ang), s = Math.sin(ang);
+    const [x, y, z] = v;
+    if (ax === 'x') return [x, y * c - z * s, y * s + z * c];
+    if (ax === 'y') return [x * c + z * s, y, -x * s + z * c];
+    return [x * c - y * s, x * s + y * c, z];
+  };
+  const toPhone = (v) => rot(rot(rot(v, 'z', 0.9), 'x', 1.1), 'y', -0.4);
+  const vec = ([x, y, z]) => ({ x, y, z });
+
+  // Carro: x = adelante, y = lateral, z = arriba. Perfil de conducción normal.
+  const perfil = (t) => {
+    const fase = t % 20;
+    if (fase < 6) return 1.8;      // acelera
+    if (fase < 10) return 0;       // mantiene
+    if (fase < 13) return -3.2;    // frena
+    return 0;                      // parado o crucero
+  };
+  let v = 0;
+  let antesDeCalibrar = null;
+  const medidas = { acel: [], freno: [], crucero: [] };
+  for (let i = 0; i <= 60 * 80; i++) {
+    const t = i / 60;
+    let a = perfil(t);
+    if (v <= 0 && a < 0) a = 0;
+    v = Math.max(0, v + a / 60);
+    const vib = 0.35 * Math.sin(i * 2.3) ; // vibración del motor
+    const lateral = 0.6 * Math.sin(t / 3); // pequeñas correcciones de volante
+    est.pushMotion(vec(toPhone([a + vib, lateral, vib * 0.5])), vec(toPhone([0, 0, -9.81])), 2 * Math.sin(t / 3));
+    if (i % 60 === 0) {
+      est.pushGps(T0 + t * 1000, v);
+      if (t === 4) antesDeCalibrar = est.valueG;
+    }
+    if (t > 40) {
+      const fase = t % 20;
+      if (fase > 2 && fase < 5.5) medidas.acel.push(est.valueG);
+      if (fase > 10.8 && fase < 12.5 && v > 0.5) medidas.freno.push(est.valueG);
+      if (fase > 7.5 && fase < 9.5) medidas.crucero.push(est.valueG);
+    }
+  }
+  const media = (xs) => xs.reduce((s, x) => s + x, 0) / Math.max(1, xs.length);
+  check('antes de calibrar usa el GPS (g)', antesDeCalibrar, 1.8 / 9.80665, 0.03);
+  check('queda calibrado solo', est.calibrated ? 1 : 0, 1, 0);
+  check('acelerando 1,8 m/s² (g)', media(medidas.acel), 1.8 / 9.80665, 0.02);
+  check('frenando 3,2 m/s² (g)', media(medidas.freno), -3.2 / 9.80665, 0.03);
+  check('a velocidad constante (g)', media(medidas.crucero), 0, 0.02);
+}
+{
+  console.log('\n— Acelerómetro + GPS: subida del 8 % a velocidad constante —');
+  const { LongitudinalEstimator } = require(path.join(BUILD, 'services/longitudinal.js'));
+  const est = new LongitudinalEstimator();
+  // En una cuesta el estimador de gravedad del iPhone ya descuenta la
+  // pendiente; aquí se simula un resto de 0,3 m/s² que no descontó.
+  let v = 0;
+  const xs = [];
+  for (let i = 0; i <= 60 * 90; i++) {
+    const t = i / 60;
+    const a = t < 30 ? (t % 10 < 5 ? 1.5 : -1.5) : 0;
+    v = Math.max(0, v + a / 60);
+    const resto = t >= 30 ? 0.3 : 0;
+    est.pushMotion({ x: 0, y: a + resto, z: 0 }, { x: 0, y: 0, z: -9.81 }, 0);
+    if (i % 60 === 0) est.pushGps(T0 + t * 1000, v);
+    if (t > 70) xs.push(est.valueG);
+  }
+  check('el GPS corrige el desvío (g)', xs.reduce((s, x) => s + x, 0) / xs.length, 0, 0.01);
+}
+
 console.log(failures === 0 ? '\nTodas las comprobaciones pasaron.' : `\n${failures} comprobaciones fallaron.`);
 process.exit(failures === 0 ? 0 : 1);

@@ -21,7 +21,6 @@ import { CarShowcase } from '@/components/CarShowcase';
 import {
   DashClock,
   DashStat,
-  GMeter,
   LinearMeter,
   MiniGauge,
   Panel,
@@ -38,6 +37,8 @@ import { FACTORY_VEHICLES } from '@/vehicles';
 import { TAB_BAR_HIDDEN, TAB_BAR_STYLE } from '@/theme/tabBar';
 import { colors, font, fonts, gradeColor, mono, radius, spacing } from '@/theme/theme';
 import { useAccent } from '@/theme/accent';
+import { AccelRing } from '@/components/AccelRing';
+import { LiveCar } from '@/components/LiveCar';
 import { altitudeEffect, compare0100, pressureAltitudeM } from '@/utils/altitude';
 import {
   formatAccel,
@@ -114,7 +115,9 @@ export default function SpeedScreen() {
   const heading = displayHeading(live.speedKmh, live.heading, sensors.compass.headingDeg);
   const motionOk = sensors.motion.status === 'activo';
   const lateralG = motionOk ? sensors.motion.lateralG : 0;
-  const longG = live.gForce;
+  // Aceleración: acelerómetro calibrado contra el GPS; sin sensores, la del GPS.
+  const longCalibrated = motionOk && sensors.motion.longCalibrated;
+  const longG = motionOk ? sensors.motion.longG : live.gForce;
 
   // ---- Paginado horizontal ----
   const pager = useRef<ScrollViewInstance>(null);
@@ -258,15 +261,8 @@ export default function SpeedScreen() {
     />
   );
 
-  const altitudeGauge = (
-    <MiniGauge
-      label="altitud"
-      value={live.altitude != null ? live.altitude : null}
-      min={0}
-      max={4000}
-      unit="m"
-      size={sideGauge}
-    />
+  const liveCar = (
+    <LiveCar size={sideGauge} bodyType={vehicle.bodyType} lateralG={lateralG} active={motionOk} />
   );
   const powerGauge = (
     <MiniGauge
@@ -279,7 +275,7 @@ export default function SpeedScreen() {
       tint={colors.lime}
     />
   );
-  const gMeter = <GMeter lateralG={lateralG} longG={longG} size={sideGauge} active={motionOk} />;
+  const accelRing = <AccelRing size={sideGauge} longG={longG} calibrated={longCalibrated} />;
 
   const distanceStat = <DashStat label="distancia" value={formatDistance(shown.distanceM, unit)} />;
   const timeStat = <DashStat label={trip ? 'tiempo de viaje' : 'sesión'} value={formatDuration(shown.durationMs)} />;
@@ -341,12 +337,12 @@ export default function SpeedScreen() {
       </View>
       <View style={styles.landscapeMain}>
         <View style={styles.sideCol}>
-          {altitudeGauge}
+          {liveCar}
           <Panel style={styles.sidePanel}>{distanceStat}</Panel>
         </View>
         <View style={styles.centered}>{dial}</View>
         <View style={styles.sideCol}>
-          {gMeter}
+          {accelRing}
           <Panel style={styles.sidePanel}>{timeStat}</Panel>
         </View>
       </View>
@@ -363,9 +359,9 @@ export default function SpeedScreen() {
       {header}
       <View style={[styles.centered, { flex: 1 }]}>{dial}</View>
       <Panel style={styles.instruments}>
-        {altitudeGauge}
-        {gMeter}
+        {liveCar}
         {powerGauge}
+        {accelRing}
       </Panel>
       <Panel style={styles.statsRow}>
         {distanceStat}
@@ -591,7 +587,7 @@ export default function SpeedScreen() {
       <SectionTitle>Dinámica</SectionTitle>
       <StatGrid>
         <StatTile
-          label="Aceleración (GPS)"
+          label={longCalibrated ? 'Aceleración (acelerómetro)' : 'Aceleración (GPS)'}
           value={`${longG >= 0 ? '+' : ''}${longG.toFixed(2)} g`}
           icon="speedometer-outline"
           tint={longG > 0.05 ? colors.lime : longG < -0.05 ? colors.danger : colors.text}
