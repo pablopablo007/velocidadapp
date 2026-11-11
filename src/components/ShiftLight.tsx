@@ -12,6 +12,8 @@ type Props = {
   rpm: number | null;
   redlineRpm: number;
   gear: number | null;
+  /** Oculta la marcha cuando la pantalla ya la muestra en grande. */
+  showGear?: boolean;
 };
 
 /**
@@ -20,7 +22,7 @@ type Props = {
  * Las rpm son estimadas a partir de la velocidad, la medida de la llanta y las
  * relaciones de caja, así que sirve de guía de cuándo cambiar, no de tacómetro.
  */
-function ShiftLightBase({ rpm, redlineRpm, gear }: Props) {
+function ShiftLightBase({ rpm, redlineRpm, gear, showGear = true }: Props) {
   const ratio = rpm != null ? Math.min(1, Math.max(0, rpm / redlineRpm)) : 0;
   const encendidos =
     ratio <= START_RATIO
@@ -49,7 +51,7 @@ function ShiftLightBase({ rpm, redlineRpm, gear }: Props) {
         })}
       </View>
       <View style={styles.meta}>
-        <Text style={styles.gear}>{gear != null ? `${gear}ª` : '—'}</Text>
+        {showGear && <Text style={styles.gear}>{gear != null ? `${gear}ª` : '—'}</Text>}
         <Text style={[styles.rpm, enCorte && { color: colors.danger }]}>
           {rpm != null ? `${formatNumber(Math.round(rpm / 50) * 50)} rpm` : 'sin marcha'}
         </Text>
@@ -61,14 +63,15 @@ function ShiftLightBase({ rpm, redlineRpm, gear }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { width: '100%', gap: 5 },
-  strip: { flexDirection: 'row', gap: 3, height: 7 },
+  strip: { flexDirection: 'row', gap: 3, height: 10 },
   segment: {
     flex: 1,
-    borderRadius: 2,
+    borderRadius: 1,
+    transform: [{ skewX: '-12deg' }], // segmentos inclinados, estilo tablero deportivo
     shadowOffset: { width: 0, height: 0 },
   },
   meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  gear: { fontSize: 13, fontWeight: '800', color: colors.accent, minWidth: 26 },
+  gear: { fontSize: 13, fontWeight: '900', fontStyle: 'italic', color: colors.accent, minWidth: 26 },
   rpm: { fontSize: 11, color: colors.textMuted, fontFamily: mono },
   redline: { fontSize: 9, color: colors.textFaint, fontFamily: mono, minWidth: 74, textAlign: 'right' },
 });

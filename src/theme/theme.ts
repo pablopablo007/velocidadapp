@@ -1,29 +1,31 @@
 /**
  * Paleta y tokens de diseño.
- * Look "HUD automotriz": fondo casi negro, tarjetas de vidrio, acentos cian/lima.
+ * Look "racing": negro profundo, blanco puro y rojo de competición, como un
+ * tablero deportivo. El rojo es la marca; el exceso de velocidad se distingue
+ * porque tiñe toda la pantalla y enciende el marco, no solo un detalle.
  */
 
 export const colors = {
-  bg: '#05070B',
-  bgElevated: '#0B0F16',
-  surface: 'rgba(255,255,255,0.045)',
-  surfaceStrong: 'rgba(255,255,255,0.075)',
-  border: 'rgba(255,255,255,0.10)',
-  borderStrong: 'rgba(255,255,255,0.18)',
+  bg: '#070708',
+  bgElevated: '#0E0E10',
+  surface: 'rgba(255,255,255,0.05)',
+  surfaceStrong: 'rgba(255,255,255,0.09)',
+  border: 'rgba(255,255,255,0.09)',
+  borderStrong: 'rgba(255,255,255,0.20)',
 
-  text: '#F2F5F9',
-  textMuted: '#8A94A6',
-  textFaint: '#5A6474',
+  text: '#FFFFFF',
+  textMuted: '#A1A1AA',
+  textFaint: '#5C5C66',
 
-  accent: '#22D3EE',
-  accentDim: 'rgba(34,211,238,0.16)',
-  lime: '#A3E635',
-  amber: '#FBBF24',
-  danger: '#FB3B4E',
-  dangerDim: 'rgba(251,59,78,0.16)',
+  accent: '#FF1E2D', // rojo de competición
+  accentDim: 'rgba(255,30,45,0.16)',
+  lime: '#32D74B', // "bien": marcas logradas, GPS preciso
+  amber: '#FFC21A',
+  danger: '#FF2D3A',
+  dangerDim: 'rgba(255,45,58,0.18)',
 
-  ascent: '#F97316', // subida
-  descent: '#38BDF8', // bajada
+  ascent: '#FF8A1F', // subida
+  descent: '#5AC8FA', // bajada
 
   track: 'rgba(255,255,255,0.08)',
 } as const;
@@ -49,9 +51,9 @@ export const spacing = {
 export const mono = 'Menlo';
 
 export const font = {
-  huge: { fontSize: 88, fontWeight: '200' as const, letterSpacing: -3 },
-  display: { fontSize: 40, fontWeight: '300' as const, letterSpacing: -1 },
-  title: { fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.4 },
+  huge: { fontSize: 88, fontWeight: '800' as const, fontStyle: 'italic' as const, letterSpacing: -3 },
+  display: { fontSize: 40, fontWeight: '700' as const, fontStyle: 'italic' as const, letterSpacing: -1 },
+  title: { fontSize: 22, fontWeight: '800' as const, fontStyle: 'italic' as const, letterSpacing: -0.4 },
   section: { fontSize: 13, fontWeight: '700' as const, letterSpacing: 1.2 },
   body: { fontSize: 15, fontWeight: '500' as const },
   small: { fontSize: 12, fontWeight: '600' as const, letterSpacing: 0.4 },
@@ -62,12 +64,20 @@ export const font = {
  * polilínea del mapa para leer "de un vistazo" dónde ibas rápido.
  */
 const SPEED_STOPS: [number, string][] = [
-  [0, '#22D3EE'],
-  [40, '#34D399'],
-  [70, '#A3E635'],
-  [100, '#FBBF24'],
-  [130, '#FB7185'],
-  [180, '#FB3B4E'],
+  [0, '#F4F4F5'],
+  [50, '#FFE14D'],
+  [90, '#FFA51F'],
+  [130, '#FF5A2A'],
+  [170, '#FF1E2D'],
+];
+
+/** Mismo degradado, listo para un <LinearGradient> de SVG (blanco → amarillo → rojo). */
+export const SPEED_GRADIENT: [number, string][] = [
+  [0, '#F4F4F5'],
+  [0.35, '#FFE14D'],
+  [0.6, '#FFA51F'],
+  [0.8, '#FF5A2A'],
+  [1, '#FF1E2D'],
 ];
 
 function hexToRgb(hex: string) {
@@ -86,7 +96,8 @@ export function speedColor(kmh: number): string {
       const a = hexToRgb(c0);
       const b = hexToRgb(c1);
       const mix = a.map((x, k) => Math.round(x + (b[k] - x) * t));
-      return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
+      // En hex, no rgb(): varias pantallas le pegan opacidad al final (`${c}22`).
+      return `#${mix.map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
     }
   }
   return SPEED_STOPS[SPEED_STOPS.length - 1][1];

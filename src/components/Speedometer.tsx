@@ -14,7 +14,7 @@ import Svg, {
 } from 'react-native-svg';
 
 import { useSmoothValue } from '@/hooks/useSmoothValue';
-import { colors, mono, speedColor } from '@/theme/theme';
+import { SPEED_GRADIENT, colors, mono, speedColor } from '@/theme/theme';
 import { KMH_TO_MPH } from '@/utils/format';
 import {
   GAUGE_START_DEG as START_DEG,
@@ -101,11 +101,9 @@ function SpeedometerBase({
       <Svg width={size} height={size}>
         <Defs>
           <LinearGradient id="speedArc" x1="0" y1="0.5" x2="1" y2="0.5">
-            <Stop offset="0" stopColor="#22D3EE" />
-            <Stop offset="0.3" stopColor="#34D399" />
-            <Stop offset="0.55" stopColor="#A3E635" />
-            <Stop offset="0.78" stopColor="#FBBF24" />
-            <Stop offset="1" stopColor="#FB3B4E" />
+            {SPEED_GRADIENT.map(([offset, color]) => (
+              <Stop key={offset} offset={String(offset)} stopColor={color} />
+            ))}
           </LinearGradient>
           <RadialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
             {/* Con exceso de velocidad el halo se atenúa: si no, el número
@@ -340,7 +338,8 @@ function SpeedometerBase({
 const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   value: {
-    fontWeight: '200',
+    fontWeight: '800',
+    fontStyle: 'italic',
     letterSpacing: -2,
     fontVariant: ['tabular-nums'],
     includeFontPadding: false,

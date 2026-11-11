@@ -68,7 +68,7 @@ export async function startBackgroundUpdates(): Promise<boolean> {
       foregroundService: {
         notificationTitle: 'Velocidad · viaje en curso',
         notificationBody: 'Registrando velocidad y recorrido.',
-        notificationColor: '#22D3EE',
+        notificationColor: '#FF1E2D',
       },
     });
     return true;

@@ -20,14 +20,14 @@ export default function TabsLayout() {
           backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.bgElevated,
           elevation: 0,
         },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '800', fontStyle: 'italic', letterSpacing: 0.4 },
         tabBarBackground:
           Platform.OS === 'ios'
             ? () => (
                 <BlurView
                   intensity={70}
                   tint="dark"
-                  style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(5,7,11,0.72)' }]}
+                  style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(7,7,8,0.78)' }]}
                 />
               )
             : undefined,

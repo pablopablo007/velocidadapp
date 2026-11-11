@@ -25,15 +25,15 @@ const {
   GAUGE_SWEEP_DEG: SWEEP,
   GAUGE_UP_DEG: UP,
 } = require(path.join(BUILD, 'utils/gauge.js'));
-const { speedColor } = require(path.join(BUILD, 'theme/theme.js'));
+const { speedColor, SPEED_GRADIENT } = require(path.join(BUILD, 'theme/theme.js'));
 
 const C = {
   track: 'rgba(255,255,255,0.08)',
   border: 'rgba(255,255,255,0.10)',
-  text: '#F2F5F9',
-  textFaint: '#5A6474',
-  danger: '#FB3B4E',
-  amber: '#FBBF24',
+  text: '#FFFFFF',
+  textFaint: '#5C5C66',
+  danger: '#FF2D3A',
+  amber: '#FFC21A',
 };
 
 function gauge(value, { max = 200, size = 320, vehicleTop = 187, limit = 100, peak = 0, overLimit = false }) {
@@ -87,9 +87,7 @@ function gauge(value, { max = 200, size = 320, vehicleTop = 187, limit = 100, pe
 <svg width="${size}" height="${size}">
  <defs>
   <linearGradient id="arc${id}" x1="0" y1="0.5" x2="1" y2="0.5">
-   <stop offset="0" stop-color="#22D3EE"/><stop offset="0.3" stop-color="#34D399"/>
-   <stop offset="0.55" stop-color="#A3E635"/><stop offset="0.78" stop-color="#FBBF24"/>
-   <stop offset="1" stop-color="#FB3B4E"/></linearGradient>
+   ${SPEED_GRADIENT.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('')}</linearGradient>
   <radialGradient id="core${id}" cx="50%" cy="50%" r="50%">
    <stop offset="0" stop-color="${tint}" stop-opacity="${overLimit ? 0.15 : 0.3}"/>
    <stop offset="0.55" stop-color="${tint}" stop-opacity="${overLimit ? 0.05 : 0.09}"/>

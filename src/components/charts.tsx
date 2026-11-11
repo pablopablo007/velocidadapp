@@ -11,7 +11,7 @@ import Svg, {
   Text as SvgText,
 } from 'react-native-svg';
 
-import { colors, mono, speedColor } from '@/theme/theme';
+import { SPEED_GRADIENT, colors, mono, speedColor } from '@/theme/theme';
 import { TrackPoint } from '@/services/tripEngine';
 import { MS_TO_KMH } from '@/utils/format';
 
@@ -173,14 +173,13 @@ export function SpeedChart({ points, height = 150 }: SeriesProps) {
         <Svg width={width} height={height}>
           <Defs>
             <LinearGradient id="speedLine" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="#FB3B4E" />
-              <Stop offset="0.35" stopColor="#FBBF24" />
-              <Stop offset="0.7" stopColor="#A3E635" />
-              <Stop offset="1" stopColor="#22D3EE" />
+              {[...SPEED_GRADIENT].reverse().map(([offset, color]) => (
+                <Stop key={offset} offset={String(1 - offset)} stopColor={color} />
+              ))}
             </LinearGradient>
             <LinearGradient id="speedFill" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="#FBBF24" stopOpacity="0.30" />
-              <Stop offset="1" stopColor="#22D3EE" stopOpacity="0.02" />
+              <Stop offset="0" stopColor={colors.accent} stopOpacity="0.30" />
+              <Stop offset="1" stopColor={colors.accent} stopOpacity="0.02" />
             </LinearGradient>
           </Defs>
 
