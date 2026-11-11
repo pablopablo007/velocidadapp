@@ -375,7 +375,7 @@ export class TripEngine {
   private currentHeading: number | null = null;
   private currentAccuracy: number | null = null;
 
-  constructor(private vehicle: Vehicle, startedAt = Date.now()) {
+  constructor(readonly vehicle: Vehicle, startedAt = Date.now()) {
     this.startedAt = startedAt;
   }
 

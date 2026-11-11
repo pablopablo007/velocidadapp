@@ -22,6 +22,8 @@ import { CarPlaySync } from '@/state/CarPlaySync';
 import { SensorsProvider } from '@/state/SensorsContext';
 import { SettingsProvider } from '@/state/SettingsContext';
 import { TrackingProvider } from '@/state/TrackingContext';
+import { VehicleSwitchProvider } from '@/state/VehicleSwitch';
+import { AccentProvider } from '@/theme/accent';
 import { colors } from '@/theme/theme';
 
 // La pantalla de carga se queda hasta tener la tipografía: si no, las cifras
@@ -52,6 +54,8 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>
         <SettingsProvider>
+          <AccentProvider>
+          <VehicleSwitchProvider>
           <TrackingProvider>
             <SensorsProvider>
             <CarPlaySync />
@@ -74,6 +78,8 @@ export default function RootLayout() {
             </Stack>
             </SensorsProvider>
           </TrackingProvider>
+          </VehicleSwitchProvider>
+          </AccentProvider>
         </SettingsProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

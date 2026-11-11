@@ -33,8 +33,11 @@ import { Badge, EmptyState, GlassCard, PrimaryButton, SectionTitle, StatGrid, St
 import { displayHeading, SensorStatus, useSensors } from '@/state/SensorsContext';
 import { useSettings } from '@/state/SettingsContext';
 import { useTracking } from '@/state/TrackingContext';
+import { useVehicleSwitch } from '@/state/VehicleSwitch';
+import { FACTORY_VEHICLES } from '@/vehicles';
 import { TAB_BAR_HIDDEN, TAB_BAR_STYLE } from '@/theme/tabBar';
 import { colors, font, fonts, gradeColor, mono, radius, spacing } from '@/theme/theme';
+import { useAccent } from '@/theme/accent';
 import { altitudeEffect, compare0100, pressureAltitudeM } from '@/utils/altitude';
 import {
   formatAccel,
@@ -59,6 +62,7 @@ import { cardinal } from '@/utils/geo';
  * dice de qué medida sale.
  */
 export default function SpeedScreen() {
+  const accent = useAccent();
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -78,6 +82,12 @@ export default function SpeedScreen() {
   const unit = settings.unit;
   const unitLabel = speedUnitLabel(unit);
   const vehicle = settings.vehicle;
+  const { switchVehicle } = useVehicleSwitch();
+  /** El otro carro del garaje: tocar el nombre del tablero cambia a él. */
+  const nextVehicleId = useMemo(() => {
+    const i = FACTORY_VEHICLES.findIndex((fv) => fv.id === settings.activeVehicleId);
+    return FACTORY_VEHICLES[(i + 1) % FACTORY_VEHICLES.length].id;
+  }, [settings.activeVehicleId]);
   const shown = trip ?? live;
 
   const gaugeMax = useMemo(() => {
@@ -185,7 +195,14 @@ export default function SpeedScreen() {
       <View style={styles.headerSide}>
         <DashClock />
       </View>
-      <Text style={styles.brand}>POLO TRACK</Text>
+      <Pressable
+        onPress={(e) => switchVehicle(nextVehicleId, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel={`Cambiar de vehículo. Ahora: ${vehicle.model}`}
+      >
+        <Text style={styles.brand}>{vehicle.model.toUpperCase()}</Text>
+      </Pressable>
       <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>
         <View style={styles.gpsChip}>
           <View style={[styles.dot, { backgroundColor: gps.tint }]} />
@@ -240,7 +257,7 @@ export default function SpeedScreen() {
       label="máxima"
       value={formatNumber(toDisplaySpeed(shown.maxSpeedKmh, unit))}
       unit={unitLabel}
-      tint={colors.accent}
+      tint={accent.accent}
     />
   );
 
@@ -385,7 +402,7 @@ export default function SpeedScreen() {
           value={formatNumber(toDisplaySpeed(shown.maxSpeedKmh, unit))}
           unit={unitLabel}
           icon="flash-outline"
-          tint={colors.accent}
+          tint={accent.accent}
         />
         <StatTile
           label="Máxima sostenida"
@@ -507,7 +524,7 @@ export default function SpeedScreen() {
           label="0 → 100 km/h"
           value={formatAccel(live.perf.t0_100)}
           icon="rocket-outline"
-          tint={live.perf.t0_100 != null ? colors.accent : colors.textFaint}
+          tint={live.perf.t0_100 != null ? accent.accent : colors.textFaint}
           compact
         />
         <StatTile label="0 → 60 km/h" value={formatAccel(live.perf.t0_60)} icon="rocket-outline" compact />
@@ -617,7 +634,15 @@ export default function SpeedScreen() {
         <Text style={styles.vehicleChipText}>
           {vehicle.make} {vehicle.model} {vehicle.year} · {vehicle.trim}
         </Text>
-        <Ionicons name="chevron-forward" size={14} color={colors.textFaint} />
+        <Pressable
+          onPress={(e) => switchVehicle(nextVehicleId, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })}
+          hitSlop={10}
+          style={styles.swapButton}
+          accessibilityRole="button"
+          accessibilityLabel="Cambiar de vehículo"
+        >
+          <Ionicons name="swap-horizontal" size={16} color={accent.accent} />
+        </Pressable>
       </Pressable>
     </ScrollView>
   );
@@ -783,6 +808,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     paddingVertical: 11,
     paddingHorizontal: spacing.lg,
+  },
+  swapButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceStrong,
   },
   vehicleChipText: { flex: 1, fontSize: 13, color: colors.textMuted, fontWeight: '600' },
 });

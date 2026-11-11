@@ -23,6 +23,7 @@ import {
 } from '@/services/database';
 import { useSettings } from '@/state/SettingsContext';
 import { colors, font, mono, radius, spacing, speedColor, fonts } from '@/theme/theme';
+import { useAccent } from '@/theme/accent';
 import {
   distanceUnitLabel,
   formatAccel,
@@ -38,6 +39,7 @@ import {
 const TAB_BAR_SPACE = 78;
 
 export default function HistoryScreen() {
+  const accent = useAccent();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { settings } = useSettings();
@@ -103,7 +105,7 @@ export default function HistoryScreen() {
               value={formatNumber(toDisplayDistanceKm(totals.distanceM / 1000, unit), 1)}
               unit={distLabel}
               icon="trail-sign-outline"
-              tint={colors.accent}
+              tint={accent.accent}
             />
             <StatTile
               label="Al volante"
@@ -180,14 +182,14 @@ export default function HistoryScreen() {
               label="60 → 100 en marcha"
               value={formatAccel(totals.bestRoll60_100)}
               icon="trending-up-outline"
-              tint={totals.bestRoll60_100 != null ? colors.accent : colors.textFaint}
+              tint={totals.bestRoll60_100 != null ? accent.accent : colors.textFaint}
               compact
             />
             <StatTile
               label="80 → 120 en marcha"
               value={formatAccel(totals.bestRoll80_120)}
               icon="trending-up-outline"
-              tint={totals.bestRoll80_120 != null ? colors.accent : colors.textFaint}
+              tint={totals.bestRoll80_120 != null ? accent.accent : colors.textFaint}
               compact
             />
             <StatTile
@@ -218,7 +220,7 @@ export default function HistoryScreen() {
       }}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accent.accent} />
       }
       ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
       ListEmptyComponent={

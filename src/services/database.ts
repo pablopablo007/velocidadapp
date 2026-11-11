@@ -3,7 +3,7 @@ import { SpeedAnalysis } from './speedStats';
 import { PerfResults, TrackPoint } from './tripEngine';
 
 /** Versión del esquema. Al subirla hay que añadir su bloque en `migrate`. */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 export type TripSummary = {
   id: string;
@@ -27,6 +27,8 @@ export type TripSummary = {
   note: string | null;
   /** Análisis de velocidad; `null` en viajes grabados antes de que existiera. */
   analysis: SpeedAnalysis | null;
+  /** Con qué vehículo se hizo; `null` en viajes de antes de haber varios (todos del Polo). */
+  vehicleId: string | null;
 };
 
 export type Trip = TripSummary & { points: TrackPoint[] };
@@ -90,6 +92,13 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     }
   }
 
+  if (current < 3) {
+    const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(trips)');
+    if (!columns.some((c) => c.name === 'vehicle_id')) {
+      await db.execAsync('ALTER TABLE trips ADD COLUMN vehicle_id TEXT');
+    }
+  }
+
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }
 
@@ -114,6 +123,7 @@ type Row = {
   perf: string | null;
   note: string | null;
   analysis?: string | null;
+  vehicle_id?: string | null;
   points?: string;
 };
 
@@ -167,6 +177,7 @@ function rowToSummary(r: Row): TripSummary {
     perf,
     note: r.note,
     analysis,
+    vehicleId: r.vehicle_id ?? null,
   };
 }
 
@@ -176,8 +187,8 @@ export async function saveTrip(trip: Trip): Promise<void> {
     `INSERT OR REPLACE INTO trips (
        id, started_at, ended_at, distance_m, duration_ms, moving_ms,
        max_speed, avg_speed, avg_moving, elev_gain, elev_loss, max_alt, min_alt,
-       start_label, end_label, fuel_l, cost, perf, note, analysis, points
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       start_label, end_label, fuel_l, cost, perf, note, analysis, vehicle_id, points
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       trip.id,
       trip.startedAt,
@@ -199,6 +210,7 @@ export async function saveTrip(trip: Trip): Promise<void> {
       JSON.stringify(trip.perf),
       trip.note,
       trip.analysis ? JSON.stringify(trip.analysis) : null,
+      trip.vehicleId ?? null,
       JSON.stringify(trip.points),
     ]
   );
@@ -210,7 +222,7 @@ export async function listTrips(limit = 200): Promise<TripSummary[]> {
   const rows = await db.getAllAsync<Row>(
     `SELECT id, started_at, ended_at, distance_m, duration_ms, moving_ms,
             max_speed, avg_speed, avg_moving, elev_gain, elev_loss, max_alt, min_alt,
-            start_label, end_label, fuel_l, cost, perf, note, analysis
+            start_label, end_label, fuel_l, cost, perf, note, analysis, vehicle_id
      FROM trips ORDER BY started_at DESC LIMIT ?`,
     [limit]
   );

@@ -5,6 +5,7 @@ import Svg, { Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from 'react-n
 
 import { MIN_FRAMES_FOR_SPIN } from '@/services/carPhotos';
 import { colors, mono } from '@/theme/theme';
+import { useAccent } from '@/theme/accent';
 
 /** Píxeles de arrastre que hacen avanzar un fotograma. */
 const DRAG_PER_FRAME = 18;
@@ -17,6 +18,7 @@ type Props = {
 };
 
 function CarSpinnerBase({ frames, height = 190, autoSpin = true }: Props) {
+  const accent = useAccent();
   const [index, setIndex] = useState(0);
   const [touched, setTouched] = useState(false);
 
@@ -111,7 +113,7 @@ function CarSpinnerBase({ frames, height = 190, autoSpin = true }: Props) {
                   key={i}
                   style={[
                     styles.dot,
-                    i === index && { backgroundColor: colors.accent, width: 14 },
+                    i === index && { backgroundColor: accent.accent, width: 14 },
                   ]}
                 />
               ))}
@@ -129,6 +131,7 @@ function CarSpinnerBase({ frames, height = 190, autoSpin = true }: Props) {
  * se vea completa desde el primer día.
  */
 export function CarIllustration({ height = 190 }: { height?: number }) {
+  const accent = useAccent();
   return (
     <View style={{ height, width: '100%' }}>
       <Svg width="100%" height="100%" viewBox="0 0 260 120" preserveAspectRatio="xMidYMid meet">
@@ -209,7 +212,7 @@ export function CarIllustration({ height = 190 }: { height?: number }) {
                 transform={`rotate(${a}, ${cx}, 86)`}
               />
             ))}
-            <Ellipse cx={cx} cy={86} rx={3} ry={3} fill={colors.accent} />
+            <Ellipse cx={cx} cy={86} rx={3} ry={3} fill={accent.accent} />
           </G>
         ))}
       </Svg>

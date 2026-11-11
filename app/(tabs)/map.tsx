@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui';
 import { MapStyle, useSettings } from '@/state/SettingsContext';
 import { useTracking } from '@/state/TrackingContext';
 import { colors, fonts, mono, radius, spacing, speedColor } from '@/theme/theme';
+import { useAccent } from '@/theme/accent';
 import {
   formatDistance,
   formatDuration,
@@ -28,6 +29,7 @@ const MAP_STYLE_ICON: Record<MapStyle, React.ComponentProps<typeof Ionicons>['na
 };
 
 export default function MapScreen() {
+  const accent = useAccent();
   const insets = useSafeAreaInsets();
   const { settings, update } = useSettings();
   // El viaje se controla solo desde Velocidad: aquí se ve, no se maneja.
@@ -169,7 +171,7 @@ export default function MapScreen() {
           <PanelStat
             label="Máxima"
             value={`${formatNumber(toDisplaySpeed(shown.maxSpeedKmh, unit))}`}
-            tint={colors.accent}
+            tint={accent.accent}
           />
           <PanelStat
             label="Desnivel"
@@ -199,10 +201,11 @@ function FloatingButton({
   onPress: () => void;
   active?: boolean;
 }) {
+  const accent = useAccent();
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
       <BlurView intensity={40} tint="dark" style={styles.fab}>
-        <Ionicons name={icon} size={20} color={active ? colors.accent : colors.text} />
+        <Ionicons name={icon} size={20} color={active ? accent.accent : colors.text} />
       </BlurView>
     </Pressable>
   );

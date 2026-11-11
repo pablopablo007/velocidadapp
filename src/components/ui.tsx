@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { colors, font, mono, radius, spacing, fonts } from '@/theme/theme';
+import { useAccent } from '@/theme/accent';
 
 export function GlassCard({
   children,
@@ -82,7 +83,7 @@ export function PrimaryButton({
   label,
   icon,
   onPress,
-  tint = colors.accent,
+  tint: tintProp,
   variant = 'solid',
   disabled = false,
   style,
@@ -95,6 +96,8 @@ export function PrimaryButton({
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
+  const accent = useAccent();
+  const tint = tintProp ?? accent.accent;
   const solid = variant === 'solid';
   return (
     <Pressable
@@ -134,11 +137,12 @@ export function Row({
   icon?: React.ComponentProps<typeof Ionicons>['name'];
   danger?: boolean;
 }) {
+  const accent = useAccent();
   const content = (
     <View style={styles.row}>
       {icon && (
         <View style={styles.rowIcon}>
-          <Ionicons name={icon} size={16} color={danger ? colors.danger : colors.accent} />
+          <Ionicons name={icon} size={16} color={danger ? colors.danger : accent.accent} />
         </View>
       )}
       <View style={styles.rowText}>
@@ -352,7 +356,9 @@ export function EmptyState({
   );
 }
 
-export function Badge({ label, tint = colors.accent }: { label: string; tint?: string }) {
+export function Badge({ label, tint: tintProp }: { label: string; tint?: string }) {
+  const accent = useAccent();
+  const tint = tintProp ?? accent.accent;
   return (
     <View style={[styles.badge, { backgroundColor: `${tint}22`, borderColor: `${tint}55` }]}>
       <Text style={[styles.badgeLabel, { color: tint }]}>{label}</Text>

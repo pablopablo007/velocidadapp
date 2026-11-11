@@ -18,11 +18,17 @@ import {
   photosDiskSize,
   saveCarPhotos,
 } from '@/services/carPhotos';
+import { useSettings } from '@/state/SettingsContext';
 import { colors, font, mono, radius, spacing } from '@/theme/theme';
+import { useAccent } from '@/theme/accent';
 
 export default function CarPhotosScreen() {
+  const accent = useAccent();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  // Las fotos son del vehículo activo: el Polo y el Gol tienen cada uno las suyas.
+  const { settings } = useSettings();
+  const vehicleId = settings.activeVehicleId;
 
   const [photos, setPhotos] = useState<CarPhotos>(NO_PHOTOS);
   const [busy, setBusy] = useState(false);
@@ -30,10 +36,10 @@ export default function CarPhotosScreen() {
   const [diskKb, setDiskKb] = useState(0);
 
   const refresh = useCallback(async () => {
-    const cargadas = await loadCarPhotos();
+    const cargadas = await loadCarPhotos(vehicleId);
     setPhotos(cargadas);
-    setDiskKb(Math.round(photosDiskSize() / 1024));
-  }, []);
+    setDiskKb(Math.round(photosDiskSize(vehicleId) / 1024));
+  }, [vehicleId]);
 
   useEffect(() => {
     // refresh es asíncrona: el setState ocurre al terminar de leer el disco,
@@ -66,18 +72,19 @@ export default function CarPhotosScreen() {
     setProgress({ done: 0, total: resultado.assets.length });
     try {
       const guardadas = await saveCarPhotos(
+        vehicleId,
         resultado.assets.map((a) => a.uri),
         (done, total) => setProgress({ done, total })
       );
       setPhotos(guardadas);
-      setDiskKb(Math.round(photosDiskSize() / 1024));
+      setDiskKb(Math.round(photosDiskSize(vehicleId) / 1024));
     } catch {
       Alert.alert('No se pudieron guardar', 'Inténtalo otra vez con menos fotos.');
     } finally {
       setBusy(false);
       setProgress(null);
     }
-  }, []);
+  }, [vehicleId]);
 
   const borrar = useCallback(() => {
     Alert.alert('Quitar las fotos', 'La tarjeta volverá a mostrar la ilustración.', [
@@ -86,12 +93,12 @@ export default function CarPhotosScreen() {
         text: 'Quitar',
         style: 'destructive',
         onPress: async () => {
-          await clearCarPhotos();
+          await clearCarPhotos(vehicleId);
           await refresh();
         },
       },
     ]);
-  }, [refresh]);
+  }, [refresh, vehicleId]);
 
   const total = photos.frames.length;
   const gira = total >= MIN_FRAMES_FOR_SPIN;
@@ -168,7 +175,7 @@ export default function CarPhotosScreen() {
 
       {busy && progress && (
         <View style={styles.progressRow}>
-          <ActivityIndicator color={colors.accent} />
+          <ActivityIndicator color={accent.accent} />
           <Text style={styles.progressText}>
             {progress.done} de {progress.total}
           </Text>
@@ -203,10 +210,11 @@ export default function CarPhotosScreen() {
 }
 
 function Step({ n, text }: { n: number; text: string }) {
+  const accent = useAccent();
   return (
     <View style={styles.step}>
-      <View style={styles.stepBadge}>
-        <Text style={styles.stepNumber}>{n}</Text>
+      <View style={[styles.stepBadge, { backgroundColor: accent.accentDim }]}>
+        <Text style={[styles.stepNumber, { color: accent.accent }]}>{n}</Text>
       </View>
       <Text style={styles.stepText}>{text}</Text>
     </View>
@@ -242,11 +250,10 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: colors.accentDim,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepNumber: { fontSize: 11, fontWeight: '800', color: colors.accent },
+  stepNumber: { fontSize: 11, fontWeight: '800', },
   stepText: { flex: 1, fontSize: 13, color: colors.textMuted, lineHeight: 19 },
 
   actions: { flexDirection: 'row', marginTop: spacing.lg },

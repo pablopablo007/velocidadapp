@@ -4,7 +4,10 @@ import React, { memo, useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, Image, LayoutChangeEvent, PanResponder, StyleSheet, View } from 'react-native';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 
+import { GOL_ART_RATIO, GolPickupArt } from '@/components/GolPickupArt';
 import { colors } from '@/theme/theme';
+import type { BodyType } from '@/vehicles/polo';
+import { useAccent } from '@/theme/accent';
 
 const CAR = require('../../assets/images/polo-track.png');
 /** Proporción de la foto recortada (alto / ancho). */
@@ -20,7 +23,8 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
  * - foco de luz detrás (un carro negro sobre fondo negro se perdería),
  *   reflejo en el piso y una flotación muy lenta.
  */
-function CarShowcaseBase({ height = 200 }: { height?: number }) {
+function CarShowcaseBase({ height = 200, bodyType = 'hatchback' }: { height?: number; bodyType?: BodyType }) {
+  const accent = useAccent();
   const [width, setWidth] = useState(0);
   // Valores animados estables: useState con inicializador (no useRef().current,
   // que las reglas de React marcan por leer un ref durante el render).
@@ -78,9 +82,20 @@ function CarShowcaseBase({ height = 200 }: { height?: number }) {
 
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
 
+  // El Polo es una foto recortada; la Pick Up, un dibujo vectorial de perfil.
+  const pickup = bodyType === 'pickup';
+  const ratio = pickup ? GOL_ART_RATIO : CAR_RATIO;
   const carH = height * 0.74;
-  const carW = Math.min(width * 0.94, carH / CAR_RATIO);
-  const realH = carW * CAR_RATIO;
+  const carW = Math.min(width * 0.94, carH / ratio);
+  const realH = carW * ratio;
+  const car = (style?: object) =>
+    pickup ? (
+      <View style={[{ width: carW, height: realH }, style]}>
+        <GolPickupArt width={carW} height={realH} />
+      </View>
+    ) : (
+      <Image source={CAR} style={[{ width: carW, height: realH }, style]} resizeMode="contain" />
+    );
   const turn = Animated.add(tiltX, drag);
 
   return (
@@ -94,8 +109,8 @@ function CarShowcaseBase({ height = 200 }: { height?: number }) {
             <Stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
           </RadialGradient>
           <RadialGradient id="floor" cx="50%" cy="50%" rx="50%" ry="50%">
-            <Stop offset="0" stopColor={colors.accent} stopOpacity="0.22" />
-            <Stop offset="1" stopColor={colors.accent} stopOpacity="0" />
+            <Stop offset="0" stopColor={accent.accent} stopOpacity="0.22" />
+            <Stop offset="1" stopColor={accent.accent} stopOpacity="0" />
           </RadialGradient>
         </Defs>
         <Ellipse cx="50%" cy="46%" rx="48%" ry="48%" fill="url(#spot)" />
@@ -121,16 +136,12 @@ function CarShowcaseBase({ height = 200 }: { height?: number }) {
               ],
             }}
           >
-            <Image source={CAR} style={{ width: carW, height: realH }} resizeMode="contain" />
+            {car()}
             {/* Reflejo en el piso */}
             <View style={{ width: carW, height: realH * 0.32, overflow: 'hidden', marginTop: -realH * 0.06 }}>
-              <Image
-                source={CAR}
-                // Volteada, la parte de abajo del carro (ruedas) queda arriba de
-                // la caja: el reflejo arranca justo bajo los neumáticos.
-                style={{ width: carW, height: realH, opacity: 0.16, transform: [{ scaleY: -1 }] }}
-                resizeMode="contain"
-              />
+              {/* Volteado, la parte de abajo del carro (ruedas) queda arriba de
+                  la caja: el reflejo arranca justo bajo los neumáticos. */}
+              {car({ opacity: 0.16, transform: [{ scaleY: -1 }] })}
               <LinearGradient
                 colors={['rgba(10,10,11,0)', colors.bg]}
                 style={StyleSheet.absoluteFill}

@@ -23,7 +23,7 @@ type Props = {
 
 /**
  * Tarjeta del carro. Con fotos propias tomadas alrededor del carro gira en
- * 360° al arrastrarla; sin ellas muestra la foto del Polo Track en 3D, que se
+ * 360° al arrastrarla; sin ellas muestra el Polo Track (foto) o la Pick Up (dibujo) en 3D, que se
  * inclina con el giroscopio.
  */
 function CarHeroBase({ vehicle, frames, driverName, onPressOptions }: Props) {
@@ -59,7 +59,7 @@ function CarHeroBase({ vehicle, frames, driverName, onPressOptions }: Props) {
           <CarSpinner frames={frames} height={200} />
         </View>
       ) : (
-        <CarShowcase height={220} />
+        <CarShowcase height={220} bodyType={vehicle.bodyType} />
       )}
     </View>
   );

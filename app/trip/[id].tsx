@@ -27,6 +27,7 @@ import { Trip, deleteTrip, getTrip } from '@/services/database';
 import { HIST_BIN_KMH, analyzePoints } from '@/services/speedStats';
 import { useSettings } from '@/state/SettingsContext';
 import { colors, font, spacing, fonts } from '@/theme/theme';
+import { useAccent } from '@/theme/accent';
 import { altitudeEffect } from '@/utils/altitude';
 import {
   formatAccel,
@@ -40,6 +41,7 @@ import {
 import { regionForPoints } from '@/utils/geo';
 
 export default function TripDetailScreen() {
+  const accent = useAccent();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -103,7 +105,7 @@ export default function TripDetailScreen() {
   if (loading) {
     return (
       <View style={[styles.screen, styles.centered]}>
-        <ActivityIndicator color={colors.accent} />
+        <ActivityIndicator color={accent.accent} />
       </View>
     );
   }
@@ -214,7 +216,7 @@ export default function TripDetailScreen() {
               label="Distancia"
               value={formatDistance(trip.distanceM, unit)}
               icon="trail-sign-outline"
-              tint={colors.accent}
+              tint={accent.accent}
             />
             <StatTile
               label="Duración"
@@ -281,7 +283,7 @@ export default function TripDetailScreen() {
                   value={formatNumber(toDisplaySpeed(analysis.p85Kmh, unit))}
                   unit={unitLabel}
                   icon="stats-chart-outline"
-                  tint={colors.accent}
+                  tint={accent.accent}
                   compact
                 />
                 <StatTile
@@ -375,14 +377,14 @@ export default function TripDetailScreen() {
                   label="60 → 100 en marcha"
                   value={formatAccel(trip.perf.roll60_100)}
                   icon="trending-up-outline"
-                  tint={trip.perf.roll60_100 != null ? colors.accent : colors.textFaint}
+                  tint={trip.perf.roll60_100 != null ? accent.accent : colors.textFaint}
                   compact
                 />
                 <StatTile
                   label="80 → 120 en marcha"
                   value={formatAccel(trip.perf.roll80_120)}
                   icon="trending-up-outline"
-                  tint={trip.perf.roll80_120 != null ? colors.accent : colors.textFaint}
+                  tint={trip.perf.roll80_120 != null ? accent.accent : colors.textFaint}
                   compact
                 />
               </StatGrid>

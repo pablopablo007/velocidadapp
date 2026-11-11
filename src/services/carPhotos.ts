@@ -13,6 +13,16 @@ import * as ImageManipulator from 'expo-image-manipulator';
 
 const DIR_NAME = 'car-photos';
 const INDEX_KEY = 'velocidad.carPhotos.v2';
+/** El Polo fue el primer carro: sus fotos siguen en la carpeta y la clave de siempre. */
+const LEGACY_VEHICLE_ID = 'polo-track-2026-16';
+
+/** Cada vehículo guarda sus fotos aparte. */
+function dirName(vehicleId: string): string {
+  return vehicleId === LEGACY_VEHICLE_ID ? DIR_NAME : `${DIR_NAME}-${vehicleId}`;
+}
+function indexKey(vehicleId: string): string {
+  return vehicleId === LEGACY_VEHICLE_ID ? INDEX_KEY : `${INDEX_KEY}.${vehicleId}`;
+}
 
 /** Ancho al que se reescalan: de sobra en pantalla y evita llenar el teléfono. */
 const TARGET_WIDTH = 1100;
@@ -29,8 +39,8 @@ export type CarPhotos = {
 
 export const NO_PHOTOS: CarPhotos = { frames: [], updatedAt: null };
 
-function photosDirectory(): Directory {
-  return new Directory(Paths.document, DIR_NAME);
+function photosDirectory(vehicleId: string): Directory {
+  return new Directory(Paths.document, dirName(vehicleId));
 }
 
 /**
@@ -40,12 +50,12 @@ function photosDirectory(): Directory {
  */
 type StoredIndex = { names: string[]; updatedAt: number };
 
-export async function loadCarPhotos(): Promise<CarPhotos> {
+export async function loadCarPhotos(vehicleId: string): Promise<CarPhotos> {
   try {
-    const raw = await AsyncStorage.getItem(INDEX_KEY);
+    const raw = await AsyncStorage.getItem(indexKey(vehicleId));
     if (!raw) return NO_PHOTOS;
     const index = JSON.parse(raw) as StoredIndex;
-    const dir = photosDirectory();
+    const dir = photosDirectory(vehicleId);
     if (!dir.exists) return NO_PHOTOS;
 
     const frames = index.names
@@ -66,10 +76,11 @@ export type SaveProgress = (done: number, total: number) => void;
  * Reemplaza por completo el conjunto anterior.
  */
 export async function saveCarPhotos(
+  vehicleId: string,
   sourceUris: string[],
   onProgress?: SaveProgress
 ): Promise<CarPhotos> {
-  const dir = photosDirectory();
+  const dir = photosDirectory(vehicleId);
   if (dir.exists) dir.delete();
   dir.create({ intermediates: true, idempotent: true });
 
@@ -90,25 +101,25 @@ export async function saveCarPhotos(
 
   const updatedAt = Date.now();
   const index: StoredIndex = { names, updatedAt };
-  await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(index));
+  await AsyncStorage.setItem(indexKey(vehicleId), JSON.stringify(index));
 
   return { frames: names.map((n) => new File(dir, n).uri), updatedAt };
 }
 
-export async function clearCarPhotos(): Promise<void> {
+export async function clearCarPhotos(vehicleId: string): Promise<void> {
   try {
-    const dir = photosDirectory();
+    const dir = photosDirectory(vehicleId);
     if (dir.exists) dir.delete();
   } catch {
     // Si el borrado falla, al menos que el índice quede vacío.
   }
-  await AsyncStorage.removeItem(INDEX_KEY);
+  await AsyncStorage.removeItem(indexKey(vehicleId));
 }
 
 /** Tamaño ocupado en disco, en bytes. */
-export function photosDiskSize(): number {
+export function photosDiskSize(vehicleId: string): number {
   try {
-    const dir = photosDirectory();
+    const dir = photosDirectory(vehicleId);
     return dir.exists ? (dir.size ?? 0) : 0;
   } catch {
     return 0;

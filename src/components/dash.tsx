@@ -7,6 +7,7 @@ import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { useSettings } from '@/state/SettingsContext';
 import { useTracking } from '@/state/TrackingContext';
 import { colors, fonts, radius, spacing } from '@/theme/theme';
+import { useAccent } from '@/theme/accent';
 import { arcPath, polar } from '@/utils/gauge';
 
 /*
@@ -103,6 +104,7 @@ export const GMeter = memo(function GMeter({
   size?: number;
   active?: boolean;
 }) {
+  const accent = useAccent();
   const c = size / 2;
   const R = size / 2 - 12;
   const clampR = (x: number, y: number) => {
@@ -134,7 +136,7 @@ export const GMeter = memo(function GMeter({
         {trail.map((t, i, arr) => (
           <Circle key={i} cx={c + t.x} cy={c + t.y} r={1.6} fill={colors.blue} opacity={(i / arr.length) * 0.5} />
         ))}
-        <Circle cx={c + p.x} cy={c + p.y} r={5} fill={active ? colors.accent : colors.textFaint} />
+        <Circle cx={c + p.x} cy={c + p.y} r={5} fill={active ? accent.accent : colors.textFaint} />
         <SvgText x={c} y={9} fill={colors.textMuted} fontSize={8} textAnchor="middle">acel</SvgText>
         <SvgText x={c} y={size - 2} fill={colors.textMuted} fontSize={8} textAnchor="middle">freno</SvgText>
       </Svg>
@@ -235,6 +237,7 @@ export function DashClock() {
  * al llevar un rato detenido.
  */
 export function TripControl({ compact = false }: { compact?: boolean }) {
+  const accent = useAccent();
   const router = useRouter();
   const { settings } = useSettings();
   const { status, savingTrip, start, pause, resume, stop, discard } = useTracking();
@@ -279,7 +282,7 @@ export function TripControl({ compact = false }: { compact?: boolean }) {
 
   return (
     <View style={[styles.tripRow, compact && styles.tripRowCompact]}>
-      <View style={[styles.dot, { backgroundColor: status === 'recording' ? colors.accent : colors.amber }]} />
+      <View style={[styles.dot, { backgroundColor: status === 'recording' ? accent.accent : colors.amber }]} />
       <Text style={[styles.tripHint, { color: colors.text }]} numberOfLines={1}>
         {status === 'recording' ? 'Grabando viaje' : 'En pausa'}
       </Text>
@@ -294,11 +297,11 @@ export function TripControl({ compact = false }: { compact?: boolean }) {
       <Pressable
         onPress={finish}
         disabled={savingTrip}
-        style={({ pressed }) => [styles.pill, styles.pillStop, (pressed || savingTrip) && styles.pressed]}
+        style={({ pressed }) => [styles.pill, { backgroundColor: accent.accentDim }, (pressed || savingTrip) && styles.pressed]}
         hitSlop={8}
       >
-        <Ionicons name="stop" size={12} color={colors.accent} />
-        <Text style={[styles.pillText, { color: colors.accent }]}>{savingTrip ? '…' : 'Fin'}</Text>
+        <Ionicons name="stop" size={12} color={accent.accent} />
+        <Text style={[styles.pillText, { color: accent.accent }]}>{savingTrip ? '…' : 'Fin'}</Text>
       </Pressable>
     </View>
   );
@@ -396,7 +399,6 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 12,
   },
-  pillStop: { backgroundColor: colors.accentDim },
   pillText: { fontSize: 12, fontWeight: '600', color: colors.text },
   bigButton: {
     flexDirection: 'row',

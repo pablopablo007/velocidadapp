@@ -168,7 +168,7 @@ function SpeedometerBase({
             y1={limitMark.a.y}
             x2={limitMark.b.x}
             y2={limitMark.b.y}
-            stroke={colors.accent}
+            stroke={colors.danger}
             strokeWidth={2.5}
             strokeLinecap="round"
           />

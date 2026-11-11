@@ -22,7 +22,9 @@ import { deleteAllTrips } from '@/services/database';
 import { useSensors } from '@/state/SensorsContext';
 import { useSettings } from '@/state/SettingsContext';
 import { useTracking } from '@/state/TrackingContext';
+import { useVehicleSwitch } from '@/state/VehicleSwitch';
 import { colors, font, fonts, mono, radius, spacing } from '@/theme/theme';
+import { useAccent } from '@/theme/accent';
 import { ECUADOR_LIMITS, HOME_CITY, REFERENCE_ALTITUDES, altitudeEffect } from '@/utils/altitude';
 import { SpeedUnit, formatNumber } from '@/utils/format';
 import {
@@ -31,10 +33,12 @@ import {
   specificPower,
   strokeToBore,
 } from '@/vehicles/polo';
+import { FACTORY_VEHICLES, themeFor } from '@/vehicles';
 
 const TAB_BAR_SPACE = 78;
 
 export default function GarageScreen() {
+  const accent = useAccent();
   const insets = useSafeAreaInsets();
   const { settings, update, updateVehicle, reset } = useSettings();
   const { resetSession, permission, requestPermission, live } = useTracking();
@@ -45,11 +49,12 @@ export default function GarageScreen() {
   // Al volver de la pantalla de fotos la tarjeta debe reflejar el cambio.
   useFocusEffect(
     useCallback(() => {
-      loadCarPhotos().then(setPhotos).catch(() => {});
-    }, [])
+      loadCarPhotos(settings.activeVehicleId).then(setPhotos).catch(() => {});
+    }, [settings.activeVehicleId])
   );
 
   const v = settings.vehicle;
+  const { switchVehicle } = useVehicleSwitch();
 
   const { baro } = useSensors();
   const pressureKpa = baro.pressureHpa != null ? Math.round(baro.pressureHpa) / 10 : undefined;
@@ -75,7 +80,7 @@ export default function GarageScreen() {
   };
 
   const confirmReset = () => {
-    Alert.alert('Restaurar valores', '¿Volver a la configuración y ficha originales del Polo Track?', [
+    Alert.alert('Restaurar valores', '¿Volver a la configuración y a las fichas originales de los vehículos?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Restaurar', style: 'destructive', onPress: reset },
     ]);
@@ -93,6 +98,42 @@ export default function GarageScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <Text style={styles.screenTitle}>Garaje</Text>
+
+      {/* ------------------- elegir vehículo ------------------- */}
+      <View style={styles.pickerRow}>
+        {FACTORY_VEHICLES.map((fv) => {
+          const item = settings.vehicles[fv.id] ?? fv;
+          const t = themeFor(fv.id);
+          const on = fv.id === settings.activeVehicleId;
+          return (
+            <Pressable
+              key={fv.id}
+              onPress={(e) => switchVehicle(fv.id, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })}
+              style={({ pressed }) => [
+                styles.pickerCard,
+                on && { borderColor: t.accent, backgroundColor: t.accentDim },
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              accessibilityLabel={`Usar ${item.model}`}
+            >
+              <View style={styles.pickerTop}>
+                <View style={[styles.pickerSwatch, { backgroundColor: t.accent }]} />
+                <Text style={[styles.pickerState, on && { color: t.accent }]}>
+                  {on ? 'EN USO' : 'CAMBIAR'}
+                </Text>
+              </View>
+              <Text style={styles.pickerModel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                {item.model}
+              </Text>
+              <Text style={styles.pickerTrim} numberOfLines={1}>
+                {item.year} · {item.displacementL.toFixed(1)} · {item.powerCv} CV
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       {/* ------------------- tarjeta del vehículo ------------------- */}
       <CarHero
@@ -124,7 +165,7 @@ export default function GarageScreen() {
         <Ionicons name="camera-outline" size={16} color={colors.text} />
         <Text style={styles.photosChipText}>
           {photos.frames.length === 0
-            ? 'Pon fotos de tu Polo y gíralo en 360°'
+            ? `Pon fotos de tu ${v.model} y gíralo en 360°`
             : `${photos.frames.length} fotos · toca para cambiarlas`}
         </Text>
         <Ionicons name="chevron-forward" size={14} color={colors.textFaint} />
@@ -132,7 +173,7 @@ export default function GarageScreen() {
 
       {/* ------------------- tu ciudad ------------------- */}
       <SectionTitle right={<Badge label={`${formatNumber(HOME_CITY.altitudeM)} M`} tint={colors.blue} />}>
-        {`Tu Polo en ${HOME_CITY.label}`}
+        {`Tu ${v.model} en ${HOME_CITY.label}`}
       </SectionTitle>
       <GlassCard>
         <View style={styles.homeGrid}>
@@ -148,7 +189,7 @@ export default function GarageScreen() {
         <Text style={styles.altNote}>
           {HOME_CITY.label} está a unos {formatNumber(HOME_CITY.altitudeM)} m: el aire tiene un{' '}
           {Math.round((1 - home.pressureKpa / 101.325) * 100)} % menos de presión que en la costa
-          (~{Math.round(home.pressureKpa * 10)} hPa) y tu 1.6 atmosférico respira menos oxígeno.
+          (~{Math.round(home.pressureKpa * 10)} hPa) y tu {v.displacementL.toFixed(1)} atmosférico respira menos oxígeno.
           Calculado con la norma SAE J1349 a {HOME_CITY.tempC} °C, la media de la ciudad. Lleva{' '}
           {home.weightPerPowerKg.toFixed(1).replace('.', ',')} kg por cada CV disponible.
         </Text>
@@ -205,7 +246,7 @@ export default function GarageScreen() {
                 <View key={ref.label}>
                   {i > 0 && <Divider />}
                   <View style={styles.refRow}>
-                    <Text style={[styles.refLabel, aqui && { color: colors.accent }]}>
+                    <Text style={[styles.refLabel, aqui && { color: accent.accent }]}>
                       {ref.label}
                     </Text>
                     <Text style={styles.refAlt}>{formatNumber(ref.altitudeM)} m</Text>
@@ -215,12 +256,12 @@ export default function GarageScreen() {
                           styles.refBarFill,
                           {
                             width: `${(1 / e.factor) * 100}%`,
-                            backgroundColor: aqui ? colors.accent : colors.textFaint,
+                            backgroundColor: aqui ? accent.accent : colors.textFaint,
                           },
                         ]}
                       />
                     </View>
-                    <Text style={[styles.refCv, aqui && { color: colors.accent }]}>
+                    <Text style={[styles.refCv, aqui && { color: accent.accent }]}>
                       {Math.round(e.powerCv)} CV
                     </Text>
                   </View>
@@ -277,9 +318,13 @@ export default function GarageScreen() {
         <Divider />
         <SpecRow
           label="0-100 km/h"
-          value={`${v.accel0100Factory.toFixed(1).replace('.', ',')} s fábrica · ${v.accel0100Tested
-            .toFixed(1)
-            .replace('.', ',')} s medido en prueba`}
+          value={
+            v.accel0100Tested !== v.accel0100Factory
+              ? `${v.accel0100Factory.toFixed(1).replace('.', ',')} s fábrica · ${v.accel0100Tested
+                  .toFixed(1)
+                  .replace('.', ',')} s medido en prueba`
+              : `${v.accel0100Factory.toFixed(1).replace('.', ',')} s de fábrica`
+          }
         />
         <Divider />
         <SpecRow label="Velocidad máxima" value={`${v.topSpeedKmh} km/h`} />
@@ -316,8 +361,14 @@ export default function GarageScreen() {
 
       <SectionTitle>Seguridad</SectionTitle>
       <GlassCard padded={false}>
-        <SpecRow label="Airbags" value={`${v.airbags}`} />
+        <SpecRow label="Airbags" value={v.airbags > 0 ? `${v.airbags}` : 'No lleva'} />
         <Divider />
+        {v.assists.length === 0 && (
+          <View style={styles.assistRow}>
+            <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+            <Text style={styles.assistText}>Sin ABS ni controles electrónicos de serie: frena con margen.</Text>
+          </View>
+        )}
         {v.assists.map((a, i) => (
           <View key={a}>
             {i > 0 && <Divider />}
@@ -342,7 +393,11 @@ export default function GarageScreen() {
         <Divider />
         <SpecRow label="Peso en orden de marcha" value={`${formatNumber(v.curbWeightKg)} kg`} />
         <Divider />
-        <SpecRow label="Baúl" value={`${v.trunkL} litros`} />
+        {v.bodyType === 'pickup' ? (
+          <SpecRow label="Carga útil" value={`${formatNumber(v.payloadKg ?? 0)} kg en el balde`} />
+        ) : (
+          <SpecRow label="Baúl" value={`${v.trunkL} litros`} />
+        )}
         <Divider />
         <SpecRow label="Tanque" value={`${v.fuelTankL} litros`} />
         <Divider />
@@ -359,8 +414,7 @@ export default function GarageScreen() {
         <SpecRow label="Intervalo de servicio" value={`cada ${formatNumber(v.serviceIntervalKm)} km`} />
       </GlassCard>
       <Text style={styles.footnote}>
-        Cifras del Polo Track 1.6 MSI para Sudamérica según Volkswagen y pruebas de prensa
-        independiente. Puedes ajustarlas abajo si tu unidad difiere.
+        {v.sourceNote}
       </Text>
 
       {/* ------------------- personalizar ------------------- */}
@@ -371,7 +425,7 @@ export default function GarageScreen() {
           icon="pricetag-outline"
           value={v.nickname}
           onChange={(nickname) => updateVehicle({ nickname })}
-          placeholder="Mi Polo"
+          placeholder={`Mi ${v.model}`}
         />
         <Divider />
         <TextRow
@@ -693,6 +747,20 @@ const styles = StyleSheet.create({
   homeValue: { fontSize: 28, fontFamily: fonts.medium },
   homeUnit: { fontSize: 13, fontFamily: fonts.regular, color: colors.textMuted },
   homeLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
+  pickerRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
+  pickerCard: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  pickerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pickerSwatch: { width: 10, height: 10, borderRadius: 5 },
+  pickerState: { fontFamily: fonts.semibold, fontSize: 10, letterSpacing: 1.5, color: colors.textFaint },
+  pickerModel: { fontFamily: fonts.semibold, fontSize: 18, color: colors.text, marginTop: spacing.sm },
+  pickerTrim: { fontFamily: fonts.medium, fontSize: 11, color: colors.textMuted, marginTop: 2 },
   limitsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
   limitChip: {
     flex: 1,
@@ -700,7 +768,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
     borderWidth: 1.5,
-    borderColor: colors.accent,
+    borderColor: colors.danger, // anillo rojo de señal de tránsito
   },
   limitValue: { fontSize: 20, fontFamily: fonts.semibold, color: colors.text },
   limitLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '500' },

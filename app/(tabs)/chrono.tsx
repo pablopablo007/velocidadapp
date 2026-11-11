@@ -15,6 +15,7 @@ import { useSensors } from '@/state/SensorsContext';
 import { useSettings } from '@/state/SettingsContext';
 import { useTracking } from '@/state/TrackingContext';
 import { colors, font, mono, radius, spacing, fonts } from '@/theme/theme';
+import { useAccent } from '@/theme/accent';
 import { altitudeEffect, compare0100 } from '@/utils/altitude';
 import {
   formatAccel,
@@ -28,6 +29,7 @@ import {
 const TAB_BAR_SPACE = 78;
 
 export default function ChronoScreen() {
+  const accent = useAccent();
   const insets = useSafeAreaInsets();
   const { settings } = useSettings();
   const { live, trip } = useTracking();
@@ -84,7 +86,7 @@ export default function ChronoScreen() {
           el GPS. No hace falta tocar nada.
         </Text>
         <View style={styles.dragLive}>
-          <Text style={styles.dragLiveValue} allowFontScaling={false}>
+          <Text style={[styles.dragLiveValue, { color: accent.accent }]} allowFontScaling={false}>
             {formatNumber(toDisplaySpeed(live.speedKmh, unit))}
           </Text>
           <Text style={styles.dragLiveUnit}>{unitLabel}</Text>
@@ -123,7 +125,7 @@ export default function ChronoScreen() {
         />
       </StatGrid>
 
-      <SectionTitle right={<Badge label="SIN DETENERTE" tint={colors.accent} />}>
+      <SectionTitle right={<Badge label="SIN DETENERTE" tint={accent.accent} />}>
         Recuperaciones en marcha
       </SectionTitle>
       <StatGrid>
@@ -131,13 +133,13 @@ export default function ChronoScreen() {
           label="60 → 100 km/h"
           value={formatAccel(best.roll60_100)}
           icon="trending-up-outline"
-          tint={best.roll60_100 != null ? colors.accent : colors.textFaint}
+          tint={best.roll60_100 != null ? accent.accent : colors.textFaint}
         />
         <StatTile
           label="80 → 120 km/h"
           value={formatAccel(best.roll80_120)}
           icon="trending-up-outline"
-          tint={best.roll80_120 != null ? colors.accent : colors.textFaint}
+          tint={best.roll80_120 != null ? accent.accent : colors.textFaint}
         />
         <StatTile
           label="60 → 100 en arrancada"
@@ -233,7 +235,7 @@ export default function ChronoScreen() {
               label="Recorrido"
               value={formatDistance(trip.distanceM, unit)}
               icon="trail-sign-outline"
-              tint={colors.accent}
+              tint={accent.accent}
               compact
             />
             <StatTile
@@ -304,7 +306,6 @@ const styles = StyleSheet.create({
   dragLiveValue: {
     fontSize: 46,
     fontFamily: fonts.medium,
-    color: colors.accent,
   },
   dragLiveUnit: { fontSize: 14, color: colors.textMuted, fontWeight: '700' },
 

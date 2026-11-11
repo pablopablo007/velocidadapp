@@ -2,7 +2,7 @@
   "expo": {
     "name": "Velocidad",
     "slug": "velocidadapp",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "velocidad",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.pablo.velocidadapp",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "requireFullScreen": true,
       "infoPlist": {
         "UIBackgroundModes": [
@@ -22,7 +22,8 @@
         "NSMotionUsageDescription": "Velocidad usa el giroscopio y el barómetro del iPhone para medir las curvas en g y la presión del aire con la que se calcula la potencia del motor.",
         "NSPhotoLibraryUsageDescription": "Para elegir las fotos de tu carro y armar la tarjeta del garaje. Las fotos se quedan en tu teléfono.",
         "NSCameraUsageDescription": "Para tomar las fotos de tu carro y armar la tarjeta del garaje.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CADisableMinimumFrameDurationOnPhone": true
       }
     },
     "android": {

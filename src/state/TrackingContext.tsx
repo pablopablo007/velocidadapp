@@ -453,6 +453,8 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         perf: stats.perf,
         note: null,
         analysis: stats.analysis,
+        // El vehículo con el que empezó el viaje, aunque luego se cambie en el garaje.
+        vehicleId: engine.vehicle.id,
         points: simplified,
       });
 

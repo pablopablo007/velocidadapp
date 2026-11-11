@@ -14,8 +14,12 @@
  * datos reales.
  */
 
+export type BodyType = 'hatchback' | 'pickup';
+
 export type Vehicle = {
   id: string;
+  /** Carrocería: decide la ilustración y si se habla de baúl o de balde. */
+  bodyType: BodyType;
   nickname: string;
   make: string;
   model: string;
@@ -80,11 +84,18 @@ export type Vehicle = {
   widthMm: number;
   heightMm: number;
   wheelbaseMm: number;
+  /** Litros de baúl. En una camioneta es 0 y manda `payloadKg`. */
   trunkL: number;
+  /** Carga útil en kg (camionetas). */
+  payloadKg?: number;
+
+  /** De dónde salen las cifras: se muestra al pie de la ficha. */
+  sourceNote: string;
 };
 
 export const POLO_TRACK_2026: Vehicle = {
   id: 'polo-track-2026-16',
+  bodyType: 'hatchback',
   nickname: 'Mi Polo Track',
   make: 'Volkswagen',
   model: 'Polo Track',
@@ -152,6 +163,9 @@ export const POLO_TRACK_2026: Vehicle = {
   heightMm: 1471,
   wheelbaseMm: 2566,
   trunkL: 300,
+
+  sourceNote:
+    'Cifras del Polo Track 1.6 MSI para Sudamérica según Volkswagen y pruebas de prensa independiente. Puedes ajustarlas abajo si tu unidad difiere.',
 };
 
 /** Relación peso/potencia en kg por CV. */

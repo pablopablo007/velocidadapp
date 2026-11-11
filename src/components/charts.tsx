@@ -12,6 +12,7 @@ import Svg, {
 } from 'react-native-svg';
 
 import { SPEED_GRADIENT, colors, mono, speedColor } from '@/theme/theme';
+import { useAccent } from '@/theme/accent';
 import { TrackPoint } from '@/services/tripEngine';
 import { MS_TO_KMH } from '@/utils/format';
 
@@ -142,6 +143,7 @@ export function ElevationChart({ points, height = 150 }: SeriesProps) {
 
 /** Velocidad contra distancia, con degradado vertical según lo rápido que ibas. */
 export function SpeedChart({ points, height = 150 }: SeriesProps) {
+  const accent = useAccent();
   const { width, onLayout } = useMeasuredWidth();
 
   const data = useMemo(() => decimate(points, 240, (p) => p.s), [points]);
@@ -178,8 +180,8 @@ export function SpeedChart({ points, height = 150 }: SeriesProps) {
               ))}
             </LinearGradient>
             <LinearGradient id="speedFill" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={colors.accent} stopOpacity="0.30" />
-              <Stop offset="1" stopColor={colors.accent} stopOpacity="0.02" />
+              <Stop offset="0" stopColor={accent.accent} stopOpacity="0.30" />
+              <Stop offset="1" stopColor={accent.accent} stopOpacity="0.02" />
             </LinearGradient>
           </Defs>
 
@@ -230,6 +232,7 @@ export function DailyBars({
   height?: number;
   unitLabel?: string;
 }) {
+  const accent = useAccent();
   const { width, onLayout } = useMeasuredWidth();
   const maxKm = Math.max(1, ...data.map((d) => d.km));
   const plotH = height - 26;
@@ -241,8 +244,8 @@ export function DailyBars({
       <Svg width={width} height={height}>
         <Defs>
           <LinearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={colors.accent} />
-            <Stop offset="1" stopColor={colors.accent} stopOpacity="0.25" />
+            <Stop offset="0" stopColor={accent.accent} />
+            <Stop offset="1" stopColor={accent.accent} stopOpacity="0.25" />
           </LinearGradient>
         </Defs>
         {data.map((d, i) => {

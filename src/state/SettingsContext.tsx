@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { SpeedUnit } from '@/utils/format';
-import { POLO_TRACK_2026, Vehicle } from '@/vehicles/polo';
+import { DEFAULT_VEHICLE_ID, FACTORY_VEHICLES, factoryVehicle } from '@/vehicles';
+import { Vehicle } from '@/vehicles/polo';
 
 export type MapStyle = 'standard' | 'mutedStandard' | 'hybrid';
 
@@ -30,10 +31,27 @@ export type Settings = {
   airTempC: number;
   mapStyle: MapStyle;
   followHeading: boolean;
+  /** Fichas de todos los vehículos del garaje, por id (con los cambios del usuario). */
+  vehicles: Record<string, Vehicle>;
+  /** Vehículo con el que se conduce ahora: decide la ficha, la escala y el color. */
+  activeVehicleId: string;
+  /** Ficha del vehículo activo (derivada de `vehicles` y `activeVehicleId`). */
   vehicle: Vehicle;
 };
 
-const DEFAULTS: Settings = {
+/** Lo que se guarda: todo menos `vehicle`, que se deriva. */
+type Stored = Omit<Settings, 'vehicle'>;
+
+function factoryVehicles(): Record<string, Vehicle> {
+  return Object.fromEntries(FACTORY_VEHICLES.map((v) => [v.id, v]));
+}
+
+function withActive(s: Stored): Settings {
+  const vehicle = s.vehicles[s.activeVehicleId] ?? factoryVehicle(s.activeVehicleId);
+  return { ...s, vehicle };
+}
+
+const DEFAULTS_STORED: Stored = {
   driverName: '',
   unit: 'kmh',
   speedLimit: 50, // urbano en Ecuador
@@ -47,16 +65,22 @@ const DEFAULTS: Settings = {
   airTempC: 15,
   mapStyle: 'mutedStandard',
   followHeading: true,
-  vehicle: POLO_TRACK_2026,
+  vehicles: factoryVehicles(),
+  activeVehicleId: DEFAULT_VEHICLE_ID,
 };
+
+const DEFAULTS: Settings = withActive(DEFAULTS_STORED);
 
 const STORAGE_KEY = 'velocidad.settings.v1';
 
 type Ctx = {
   settings: Settings;
   ready: boolean;
-  update: (patch: Partial<Settings>) => void;
+  update: (patch: Partial<Omit<Settings, 'vehicle' | 'vehicles'>>) => void;
+  /** Cambia la ficha del vehículo activo. */
   updateVehicle: (patch: Partial<Vehicle>) => void;
+  /** Cambia de vehículo sin animación (la transición vive en VehicleSwitch). */
+  setActiveVehicle: (id: string) => void;
   reset: () => void;
 };
 
@@ -72,13 +96,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         if (raw && alive) {
-          const saved = JSON.parse(raw) as Partial<Settings>;
-          setSettings({
-            ...DEFAULTS,
-            ...saved,
-            // Fusiona la ficha para que al añadir campos nuevos no queden vacíos.
-            vehicle: { ...DEFAULTS.vehicle, ...(saved.vehicle ?? {}) },
-          });
+          setSettings(parseStored(JSON.parse(raw)));
         }
       } catch {
         // Preferencias ilegibles: arrancamos con los valores por defecto.
@@ -91,38 +109,72 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const persist = useCallback((next: Settings) => {
-    setSettings(next);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
-  }, []);
-
-  const update = useCallback(
-    (patch: Partial<Settings>) => {
-      setSettings((prev) => {
-        const next = { ...prev, ...patch };
-        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
-        return next;
-      });
-    },
-    []
-  );
-
-  const updateVehicle = useCallback((patch: Partial<Vehicle>) => {
+  /** Aplica un cambio sobre lo guardado, recalcula el vehículo activo y persiste. */
+  const mutate = useCallback((fn: (prev: Stored) => Stored) => {
     setSettings((prev) => {
-      const next = { ...prev, vehicle: { ...prev.vehicle, ...patch } };
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
-      return next;
+      const { vehicle: _derived, ...stored } = prev;
+      const nextStored = fn(stored);
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextStored)).catch(() => {});
+      return withActive(nextStored);
     });
   }, []);
 
-  const reset = useCallback(() => persist(DEFAULTS), [persist]);
+  const update = useCallback(
+    (patch: Partial<Omit<Settings, 'vehicle' | 'vehicles'>>) => mutate((prev) => ({ ...prev, ...patch })),
+    [mutate]
+  );
+
+  const updateVehicle = useCallback(
+    (patch: Partial<Vehicle>) =>
+      mutate((prev) => {
+        const id = prev.activeVehicleId;
+        const current = prev.vehicles[id] ?? factoryVehicle(id);
+        return { ...prev, vehicles: { ...prev.vehicles, [id]: { ...current, ...patch, id } } };
+      }),
+    [mutate]
+  );
+
+  const setActiveVehicle = useCallback(
+    (id: string) => mutate((prev) => (prev.vehicles[id] ? { ...prev, activeVehicleId: id } : prev)),
+    [mutate]
+  );
+
+  /** Restaura los ajustes y las fichas de fábrica, pero sigue en el vehículo elegido. */
+  const reset = useCallback(
+    () => mutate((prev) => ({ ...DEFAULTS_STORED, activeVehicleId: prev.activeVehicleId })),
+    [mutate]
+  );
 
   const value = useMemo<Ctx>(
-    () => ({ settings, ready, update, updateVehicle, reset }),
-    [settings, ready, update, updateVehicle, reset]
+    () => ({ settings, ready, update, updateVehicle, setActiveVehicle, reset }),
+    [settings, ready, update, updateVehicle, setActiveVehicle, reset]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+}
+
+/**
+ * Lee lo guardado en cualquier versión anterior. La v1 tenía un solo
+ * `vehicle` (el Polo, con los cambios del usuario): se conserva como la ficha
+ * del Polo y se añaden los vehículos nuevos con sus valores de fábrica.
+ */
+function parseStored(raw: unknown): Settings {
+  const saved = (raw ?? {}) as Partial<Stored> & { vehicle?: Partial<Vehicle> };
+  const { vehicle: legacy, ...rest } = saved;
+  const vehicles = factoryVehicles();
+
+  if (legacy) {
+    const id = legacy.id && vehicles[legacy.id] ? legacy.id : DEFAULT_VEHICLE_ID;
+    vehicles[id] = { ...vehicles[id], ...legacy, id };
+  }
+  for (const [id, v] of Object.entries(saved.vehicles ?? {})) {
+    // Fusiona con la ficha de fábrica para que los campos nuevos no queden vacíos.
+    vehicles[id] = { ...(vehicles[id] ?? factoryVehicle(id)), ...v, id };
+  }
+
+  const activeVehicleId =
+    rest.activeVehicleId && vehicles[rest.activeVehicleId] ? rest.activeVehicleId : DEFAULT_VEHICLE_ID;
+  return withActive({ ...DEFAULTS_STORED, ...rest, vehicles, activeVehicleId });
 }
 
 export function useSettings(): Ctx {

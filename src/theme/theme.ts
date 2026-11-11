@@ -19,8 +19,7 @@ export const colors = {
   textMuted: '#8E8E93',
   textFaint: '#4A4A50',
 
-  accent: '#FF2D46', // rojo de acento
-  accentDim: 'rgba(255,45,70,0.14)',
+  // El color de acento depende del vehículo: se lee con useAccent() (theme/accent.tsx).
   blue: '#8AB4F8',
   lime: '#8BE3A0', // "bien": marcas logradas, GPS preciso, sensor activo
   amber: '#FFD27F',
