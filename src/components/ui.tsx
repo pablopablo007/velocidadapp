@@ -11,7 +11,7 @@ import {
   ViewStyle,
 } from 'react-native';
 
-import { colors, font, mono, radius, spacing } from '@/theme/theme';
+import { colors, font, mono, radius, spacing, fonts } from '@/theme/theme';
 
 export function GlassCard({
   children,
@@ -30,7 +30,7 @@ export function GlassCard({
 export function SectionTitle({ children, right }: { children: string; right?: React.ReactNode }) {
   return (
     <View style={styles.sectionRow}>
-      <Text style={styles.sectionTitle}>{children.toUpperCase()}</Text>
+      <Text style={styles.sectionTitle}>{children}</Text>
       {right}
     </View>
   );
@@ -56,7 +56,7 @@ export function StatTile({
       <View style={styles.tileLabelRow}>
         {icon && <Ionicons name={icon} size={12} color={colors.textFaint} />}
         <Text style={styles.tileLabel} numberOfLines={1}>
-          {label.toUpperCase()}
+          {label}
         </Text>
       </View>
       <View style={styles.tileValueRow}>
@@ -181,7 +181,7 @@ export function ToggleRow({
         <Switch
           value={value}
           onValueChange={onChange}
-          trackColor={{ true: colors.accent, false: 'rgba(255,255,255,0.14)' }}
+          trackColor={{ true: colors.lime, false: 'rgba(255,255,255,0.14)' }}
           thumbColor="#FFFFFF"
           ios_backgroundColor="rgba(255,255,255,0.14)"
         />
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     paddingHorizontal: spacing.xs,
   },
-  sectionTitle: { ...font.section, color: colors.textFaint },
+  sectionTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   tile: {
@@ -400,9 +400,9 @@ const styles = StyleSheet.create({
   },
   tileCompact: { paddingVertical: spacing.sm },
   tileLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
-  tileLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: colors.textFaint, flexShrink: 1 },
+  tileLabel: { fontSize: 11, fontWeight: '500', color: colors.textMuted, flexShrink: 1 },
   tileValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  tileValue: { fontWeight: '600', letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
+  tileValue: { fontFamily: fonts.medium, letterSpacing: -0.5 },
   tileUnit: { fontSize: 11, color: colors.textFaint, fontWeight: '600' },
 
   button: {
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
   },
-  segmentActive: { backgroundColor: colors.accent },
+  segmentActive: { backgroundColor: colors.text },
   segmentLabel: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
 
   divider: { height: 1, backgroundColor: colors.border, marginLeft: spacing.lg },
@@ -493,5 +493,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
   },
-  badgeLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.7 },
+  badgeLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
 });

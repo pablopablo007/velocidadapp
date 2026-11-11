@@ -6,6 +6,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
+import { TAB_BAR_STYLE } from '@/theme/tabBar';
 import { colors } from '@/theme/theme';
 
 /**
@@ -25,23 +26,17 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.accent,
+        tabBarActiveTintColor: colors.text,
         tabBarInactiveTintColor: colors.textFaint,
-        tabBarStyle: {
-          position: 'absolute',
-          borderTopColor: colors.border,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.bgElevated,
-          elevation: 0,
-        },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '800', fontStyle: 'italic', letterSpacing: 0.4 },
+        tabBarStyle: TAB_BAR_STYLE,
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '500', letterSpacing: 0.2 },
         tabBarBackground:
           Platform.OS === 'ios'
             ? () => (
                 <BlurView
                   intensity={70}
                   tint="dark"
-                  style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(7,7,8,0.78)' }]}
+                  style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,10,11,0.82)' }]}
                 />
               )
             : undefined,

@@ -22,7 +22,7 @@ Module._resolveFilename = function (request, ...args) {
 };
 
 const { TripEngine } = require(path.join(BUILD, 'services/tripEngine.js'));
-const { POLO_TRACK_2026, estimateGearAndRpm, kmhPer1000Rpm } = require(path.join(BUILD, 'vehicles/polo.js'));
+const { POLO_TRACK_2026 } = require(path.join(BUILD, 'vehicles/polo.js'));
 const { simplify } = require(path.join(BUILD, 'utils/geo.js'));
 const { altitudeEffect, sae1349Factor, standardPressureKpa } = require(path.join(BUILD, 'utils/altitude.js'));
 const { percentileFromHistogram, HIST_BIN_KMH } = require(path.join(BUILD, 'services/speedStats.js'));
@@ -164,11 +164,6 @@ function makeFix(tSec, northM, speedMs, altitude, accuracy = 5) {
   check('simplify reduce puntos', reduced.length < pts.length ? 1 : 0, 1, 0);
   check('simplify conserva extremos', reduced[0] === pts[0] && reduced[reduced.length - 1] === pts[pts.length - 1] ? 1 : 0, 1, 0);
 
-  const g5 = kmhPer1000Rpm(POLO_TRACK_2026, 4);
-  check('5a marcha km/h por 1000 rpm', g5, 47, 12);
-  const est = estimateGearAndRpm(POLO_TRACK_2026, 100);
-  console.log(`      a 100 km/h -> ${est.gear}a marcha, ${Math.round(est.rpm)} rpm`);
-  check('rpm plausibles a 100 km/h', est.rpm, 2600, 900);
 }
 
 // ---------------------------------------------------------------- 8. altitud
@@ -193,6 +188,20 @@ function makeFix(tSec, northM, speedMs, altitude, accuracy = 5) {
   check('al nivel del mar no pierde', mar.lossPct, -2.8, 1);
   check('más altura, menos potencia',
     altitudeEffect(POLO_TRACK_2026, 3500, 15).powerCv < quito.powerCv ? 1 : 0, 1, 0);
+
+  // Cuenca: 2.560 m y unos 15 °C de media.
+  const cuenca = altitudeEffect(POLO_TRACK_2026, 2560, 15);
+  check('presión en Cuenca (kPa)', cuenca.pressureKpa, 74.1, 0.5);
+  check('potencia en Cuenca (CV)', cuenca.powerCv, 80, 2);
+  check('0-100 esperado en Cuenca (s)', (cuenca.target0100Min + cuenca.target0100Max) / 2, 13.4, 0.7);
+  check('sin barómetro usa la atmósfera estándar', cuenca.pressureSource === 'estandar' ? 1 : 0, 1, 0);
+
+  // Con barómetro manda la presión medida: un día de presión baja (borrasca)
+  // resta potencia aunque la altitud sea la misma.
+  const borrasca = altitudeEffect(POLO_TRACK_2026, 2560, 15, 72.0);
+  check('usa la presión del barómetro', borrasca.pressureSource === 'barometro' ? 1 : 0, 1, 0);
+  check('presión baja, menos potencia', borrasca.powerCv < cuenca.powerCv ? 1 : 0, 1, 0);
+  check('presión absurda se ignora', altitudeEffect(POLO_TRACK_2026, 2560, 15, 5).pressureSource === 'estandar' ? 1 : 0, 1, 0);
 }
 
 // ---------------------------------------------------------------- 9. análisis

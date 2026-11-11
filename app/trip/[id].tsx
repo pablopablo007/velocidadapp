@@ -17,7 +17,6 @@ import { ElevationChart, SpeedChart, SpeedHistogram } from '@/components/charts'
 import { SpeedTrace } from '@/components/SpeedTrace';
 import {
   Badge,
-  Divider,
   EmptyState,
   GlassCard,
   SectionTitle,
@@ -27,13 +26,12 @@ import {
 import { Trip, deleteTrip, getTrip } from '@/services/database';
 import { HIST_BIN_KMH, analyzePoints } from '@/services/speedStats';
 import { useSettings } from '@/state/SettingsContext';
-import { colors, font, spacing } from '@/theme/theme';
+import { colors, font, spacing, fonts } from '@/theme/theme';
 import { altitudeEffect } from '@/utils/altitude';
 import {
   formatAccel,
   formatDistance,
   formatDuration,
-  formatMoney,
   formatNumber,
   formatTripDate,
   speedUnitLabel,
@@ -124,7 +122,6 @@ export default function TripDetailScreen() {
 
   const first = trip.points[0];
   const last = trip.points[trip.points.length - 1];
-  const lPer100 = trip.distanceM > 0 ? (trip.fuelL / (trip.distanceM / 1000)) * 100 : 0;
   const stoppedMs = Math.max(0, trip.durationMs - trip.movingMs);
 
   return (
@@ -401,28 +398,6 @@ export default function TripDetailScreen() {
             </>
           )}
 
-          {/* ------------------- combustible ------------------- */}
-          <SectionTitle>Combustible estimado</SectionTitle>
-          <GlassCard padded={false}>
-            <FuelRow label="Consumo del viaje" value={`${trip.fuelL.toFixed(2)} L`} />
-            <Divider />
-            <FuelRow label="Promedio" value={`${lPer100.toFixed(1)} L/100 km`} />
-            <Divider />
-            <FuelRow
-              label="Costo aproximado"
-              value={formatMoney(trip.cost, settings.currency)}
-              tint={colors.amber}
-            />
-            <Divider />
-            <FuelRow
-              label="Rendimiento"
-              value={lPer100 > 0 ? `${(100 / lPer100).toFixed(1)} km/L` : '—'}
-            />
-          </GlassCard>
-          <Text style={styles.footnote}>
-            Estimación calculada a partir del consumo declarado del {settings.vehicle.model}, la
-            velocidad media y las aceleraciones registradas. No sustituye al computador de a bordo.
-          </Text>
         </View>
       </ScrollView>
     </View>
@@ -450,14 +425,6 @@ function ElevStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function FuelRow({ label, value, tint = colors.text }: { label: string; value: string; tint?: string }) {
-  return (
-    <View style={styles.fuelRow}>
-      <Text style={styles.fuelLabel}>{label}</Text>
-      <Text style={[styles.fuelValue, { color: tint }]}>{value}</Text>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
@@ -497,7 +464,7 @@ const styles = StyleSheet.create({
   routePoint: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   routeDot: { width: 10, height: 10, borderRadius: 5 },
   routeLabel: { flex: 1, ...font.body, color: colors.text },
-  routeTime: { fontSize: 13, color: colors.textFaint, fontVariant: ['tabular-nums'] },
+  routeTime: { fontSize: 13, color: colors.textFaint },
   routeLine: {
     width: 1.5,
     height: 20,
@@ -507,7 +474,7 @@ const styles = StyleSheet.create({
   },
 
   elevBadges: { flexDirection: 'row', gap: spacing.md },
-  elevBadge: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  elevBadge: { fontSize: 12, fontFamily: fonts.medium },
   elevSummary: { flexDirection: 'row', marginTop: spacing.md, gap: spacing.sm },
   elevStatLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.7, color: colors.textFaint },
   elevStatValue: {
@@ -515,7 +482,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '600',
     marginTop: 3,
-    fontVariant: ['tabular-nums'],
   },
 
   fuelRow: {
@@ -526,7 +492,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   fuelLabel: { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
-  fuelValue: { fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  fuelValue: { fontSize: 15, fontFamily: fonts.medium },
 
   footnote: {
     fontSize: 11,

@@ -19,13 +19,13 @@ import {
   ToggleRow,
 } from '@/components/ui';
 import { deleteAllTrips } from '@/services/database';
+import { useSensors } from '@/state/SensorsContext';
 import { useSettings } from '@/state/SettingsContext';
 import { useTracking } from '@/state/TrackingContext';
-import { colors, font, mono, radius, spacing } from '@/theme/theme';
-import { REFERENCE_ALTITUDES, altitudeEffect } from '@/utils/altitude';
+import { colors, font, fonts, mono, radius, spacing } from '@/theme/theme';
+import { ECUADOR_LIMITS, HOME_CITY, REFERENCE_ALTITUDES, altitudeEffect } from '@/utils/altitude';
 import { SpeedUnit, formatNumber } from '@/utils/format';
 import {
-  kmhPer1000Rpm,
   powerToWeight,
   rollingCircumferenceM,
   specificPower,
@@ -38,7 +38,6 @@ export default function GarageScreen() {
   const insets = useSafeAreaInsets();
   const { settings, update, updateVehicle, reset } = useSettings();
   const { resetSession, permission, requestPermission, live } = useTracking();
-  const [showRatios, setShowRatios] = useState(false);
 
   const router = useRouter();
   const [photos, setPhotos] = useState<CarPhotos>(NO_PHOTOS);
@@ -52,10 +51,15 @@ export default function GarageScreen() {
 
   const v = settings.vehicle;
 
+  const { baro } = useSensors();
+  const pressureKpa = baro.pressureHpa != null ? Math.round(baro.pressureHpa) / 10 : undefined;
   const effect = useMemo(() => {
     if (live.altitude == null) return null;
-    return altitudeEffect(v, Math.round(live.altitude / 50) * 50);
-  }, [v, live.altitude]);
+    return altitudeEffect(v, Math.round(live.altitude / 50) * 50, settings.airTempC, pressureKpa);
+  }, [v, live.altitude, settings.airTempC, pressureKpa]);
+
+  // Ficha fija de Cuenca: tu ciudad, a su altitud y temperatura media.
+  const home = useMemo(() => altitudeEffect(v, HOME_CITY.altitudeM, HOME_CITY.tempC), [v]);
 
   const confirmClearHistory = () => {
     Alert.alert('Borrar historial', 'Se eliminarán todos los viajes guardados. No se puede deshacer.', [
@@ -117,7 +121,7 @@ export default function GarageScreen() {
       </View>
 
       <Pressable onPress={() => router.push('/car-photos')} style={styles.photosChip}>
-        <Ionicons name="camera-outline" size={16} color={colors.accent} />
+        <Ionicons name="camera-outline" size={16} color={colors.text} />
         <Text style={styles.photosChipText}>
           {photos.frames.length === 0
             ? 'Pon fotos de tu Polo y gíralo en 360°'
@@ -126,11 +130,46 @@ export default function GarageScreen() {
         <Ionicons name="chevron-forward" size={14} color={colors.textFaint} />
       </Pressable>
 
+      {/* ------------------- tu ciudad ------------------- */}
+      <SectionTitle right={<Badge label={`${formatNumber(HOME_CITY.altitudeM)} M`} tint={colors.blue} />}>
+        {`Tu Polo en ${HOME_CITY.label}`}
+      </SectionTitle>
+      <GlassCard>
+        <View style={styles.homeGrid}>
+          <HomeStat value={`${Math.round(home.powerCv)}`} unit="CV" label={`de ${v.powerCv} de fábrica`} tint={colors.lime} />
+          <HomeStat value={`${Math.round(home.torqueNm)}`} unit="Nm" label={`de ${v.torqueNm} de par`} />
+          <HomeStat value={`−${home.lossPct.toFixed(0)}`} unit="%" label="de potencia" tint={colors.amber} />
+          <HomeStat
+            value={`${home.target0100Min.toFixed(1).replace('.', ',')}–${home.target0100Max.toFixed(1).replace('.', ',')}`}
+            unit="s"
+            label="0-100 esperable"
+          />
+        </View>
+        <Text style={styles.altNote}>
+          {HOME_CITY.label} está a unos {formatNumber(HOME_CITY.altitudeM)} m: el aire tiene un{' '}
+          {Math.round((1 - home.pressureKpa / 101.325) * 100)} % menos de presión que en la costa
+          (~{Math.round(home.pressureKpa * 10)} hPa) y tu 1.6 atmosférico respira menos oxígeno.
+          Calculado con la norma SAE J1349 a {HOME_CITY.tempC} °C, la media de la ciudad. Lleva{' '}
+          {home.weightPerPowerKg.toFixed(1).replace('.', ',')} kg por cada CV disponible.
+        </Text>
+        <View style={styles.limitsRow}>
+          {ECUADOR_LIMITS.map((l) => (
+            <View key={l.label} style={styles.limitChip}>
+              <Text style={styles.limitValue}>{l.kmh}</Text>
+              <Text style={styles.limitLabel}>{l.label.toLowerCase()}</Text>
+            </View>
+          ))}
+        </View>
+        <Text style={styles.footnote}>
+          Límites para vehículos livianos en Ecuador (km/h). Manda la señalización de cada vía.
+        </Text>
+      </GlassCard>
+
       {/* ------------------- potencia real a la altitud actual ------------------- */}
       {effect && (
         <>
           <SectionTitle right={<Badge label="AQUÍ Y AHORA" tint={colors.amber} />}>
-            Potencia disponible
+            Potencia disponible ahora
           </SectionTitle>
           <GlassCard>
             <View style={styles.altRow}>
@@ -149,8 +188,11 @@ export default function GarageScreen() {
               </View>
             </View>
             <Text style={styles.altNote}>
-              Un motor atmosférico entrega lo que le permita el aire que respira. Estas son las
-              cifras corregidas por la norma SAE J1349 para la altitud a la que estás ahora mismo.
+              Corregida por la norma SAE J1349 con{' '}
+              {effect.pressureSource === 'barometro'
+                ? `la presión real del barómetro (${Math.round(effect.pressureKpa * 10)} hPa)`
+                : 'la presión estándar para tu altitud'}{' '}
+              y {settings.airTempC} °C.
             </Text>
           </GlassCard>
 
@@ -243,11 +285,6 @@ export default function GarageScreen() {
         <SpecRow label="Velocidad máxima" value={`${v.topSpeedKmh} km/h`} />
         <Divider />
         <SpecRow label="Relación peso/potencia" value={`${powerToWeight(v).toFixed(1)} kg/CV`} />
-        <Divider />
-        <SpecRow
-          label="Velocidad en 5ª"
-          value={`${kmhPer1000Rpm(v, v.ratios.gears.length - 1).toFixed(1)} km/h por 1.000 rpm (aprox.)`}
-        />
       </GlassCard>
 
       <SectionTitle>Chasis, frenos y dirección</SectionTitle>
@@ -358,7 +395,7 @@ export default function GarageScreen() {
         <Divider />
         <NumberRow
           label="Consumo mixto"
-          hint="Base del cálculo de combustible y costo"
+          hint="Dato homologado de fábrica"
           icon="water-outline"
           value={v.consumptionMixed}
           onChange={(consumptionMixed) => updateVehicle({ consumptionMixed })}
@@ -382,17 +419,6 @@ export default function GarageScreen() {
         />
         <Divider />
         <NumberRow
-          label="Corte de inyección"
-          icon="pulse-outline"
-          value={v.redlineRpm}
-          onChange={(redlineRpm) => updateVehicle({ redlineRpm })}
-          suffix="rpm"
-          step={100}
-          min={3000}
-          max={10000}
-        />
-        <Divider />
-        <NumberRow
           label="Tanque"
           icon="beaker-outline"
           value={v.fuelTankL}
@@ -402,53 +428,6 @@ export default function GarageScreen() {
           min={10}
           max={200}
         />
-        <Divider />
-        <Row
-          label="Relaciones de caja"
-          hint="Aproximadas: solo afectan al tacómetro estimado"
-          icon="git-compare-outline"
-          onPress={() => setShowRatios((s) => !s)}
-          right={
-            <Ionicons
-              name={showRatios ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={colors.textFaint}
-            />
-          }
-        />
-        {showRatios && (
-          <>
-            {v.ratios.gears.map((ratio, i) => (
-              <View key={i}>
-                <Divider />
-                <NumberRow
-                  label={`${i + 1}ª marcha`}
-                  hint={`${kmhPer1000Rpm(v, i).toFixed(1)} km/h por 1.000 rpm`}
-                  value={ratio}
-                  onChange={(next) => {
-                    const gears = [...v.ratios.gears];
-                    gears[i] = next;
-                    updateVehicle({ ratios: { ...v.ratios, gears } });
-                  }}
-                  step={0.01}
-                  decimals={2}
-                  min={0.3}
-                  max={6}
-                />
-              </View>
-            ))}
-            <Divider />
-            <NumberRow
-              label="Grupo final"
-              value={v.ratios.final}
-              onChange={(final) => updateVehicle({ ratios: { ...v.ratios, final } })}
-              step={0.01}
-              decimals={2}
-              min={2}
-              max={7}
-            />
-          </>
-        )}
       </GlassCard>
 
       {/* ------------------- ajustes ------------------- */}
@@ -482,6 +461,21 @@ export default function GarageScreen() {
           min={10}
           max={300}
         />
+        <View style={styles.presetRow}>
+          {ECUADOR_LIMITS.map((l) => {
+            const on = settings.speedLimit === l.kmh;
+            return (
+              <Pressable
+                key={l.label}
+                onPress={() => update({ speedLimit: l.kmh, speedAlertEnabled: true })}
+                style={[styles.preset, on && styles.presetOn]}
+              >
+                <Text style={[styles.presetValue, on && { color: colors.bg }]}>{l.kmh}</Text>
+                <Text style={[styles.presetLabel, on && { color: colors.bg }]}>{l.label.toLowerCase()}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
         <Divider />
         <ToggleRow
           label="Vibración"
@@ -496,6 +490,25 @@ export default function GarageScreen() {
           icon="sunny-outline"
           value={settings.keepAwake}
           onChange={(keepAwake) => update({ keepAwake })}
+        />
+        <Divider />
+        <ToggleRow
+          label="Viajes automáticos"
+          hint="Empieza solo al arrancar y se guarda solo al llegar"
+          icon="flash-outline"
+          value={settings.autoTrips}
+          onChange={(autoTrips) => update({ autoTrips })}
+        />
+        <Divider />
+        <NumberRow
+          label="Guardar tras detenido"
+          hint="Minutos parado para dar el viaje por terminado"
+          value={settings.autoStopMinutes}
+          onChange={(autoStopMinutes) => update({ autoStopMinutes })}
+          suffix="min"
+          step={1}
+          min={2}
+          max={60}
         />
         <Divider />
         <ToggleRow
@@ -525,27 +538,18 @@ export default function GarageScreen() {
         />
       </GlassCard>
 
-      <SectionTitle>Combustible</SectionTitle>
+      <SectionTitle>Aire</SectionTitle>
       <GlassCard padded={false}>
         <NumberRow
-          label="Precio por galón"
-          hint="Para estimar el costo de cada viaje"
-          icon="cash-outline"
-          value={settings.fuelPrice}
-          onChange={(fuelPrice) => update({ fuelPrice })}
-          suffix={settings.currency}
-          step={0.05}
-          decimals={2}
-          min={0}
-          max={100}
-        />
-        <Divider />
-        <TextRow
-          label="Símbolo de moneda"
-          icon="pricetags-outline"
-          value={settings.currency}
-          onChange={(currency) => update({ currency })}
-          placeholder="$"
+          label="Temperatura exterior"
+          hint="El iPhone no tiene termómetro exterior: ajústala si hace mucho frío o calor"
+          icon="thermometer-outline"
+          value={settings.airTempC}
+          onChange={(airTempC) => update({ airTempC })}
+          suffix="°C"
+          step={1}
+          min={-10}
+          max={45}
         />
       </GlassCard>
 
@@ -614,6 +618,28 @@ function HeroSpec({ value, unit, label }: { value: string; unit: string; label: 
   );
 }
 
+function HomeStat({
+  value,
+  unit,
+  label,
+  tint = colors.text,
+}: {
+  value: string;
+  unit: string;
+  label: string;
+  tint?: string;
+}) {
+  return (
+    <View style={styles.homeStat}>
+      <Text style={[styles.homeValue, { color: tint }]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+        <Text style={styles.homeUnit}> {unit}</Text>
+      </Text>
+      <Text style={styles.homeLabel}>{label}</Text>
+    </View>
+  );
+}
+
 function SpecRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.specRow}>
@@ -651,16 +677,45 @@ const styles = StyleSheet.create({
   },
   photosChipText: { flex: 1, fontSize: 13, color: colors.textMuted, fontWeight: '600' },
   heroSpec: { alignItems: 'flex-start' },
-  heroSpecValue: { fontSize: 22, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  heroSpecValue: { fontSize: 22, fontFamily: fonts.medium, color: colors.text },
   heroSpecUnit: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
-  heroSpecLabel: { fontSize: 9, color: colors.textFaint, fontWeight: '800', letterSpacing: 0.7, marginTop: 2 },
+  heroSpecLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '500', marginTop: 2 },
   heroBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 
   altRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  altPower: { ...font.display, color: colors.text, fontVariant: ['tabular-nums'] },
-  altPowerUnit: { fontSize: 15, color: colors.textMuted, fontWeight: '700' },
+  altPower: { ...font.display, color: colors.text },
+  altPowerUnit: { fontSize: 15, color: colors.textMuted, fontFamily: fonts.regular },
   altPowerSub: { fontSize: 12, color: colors.textFaint, marginTop: 2, fontFamily: mono },
-  altLoss: { fontSize: 22, fontWeight: '700', color: colors.amber, fontVariant: ['tabular-nums'] },
+  altLoss: { fontSize: 22, fontFamily: fonts.medium, color: colors.amber },
+
+  homeGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: spacing.md },
+  homeStat: { width: '50%' },
+  homeValue: { fontSize: 28, fontFamily: fonts.medium },
+  homeUnit: { fontSize: 13, fontFamily: fonts.regular, color: colors.textMuted },
+  homeLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
+  limitsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  limitChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+  },
+  limitValue: { fontSize: 20, fontFamily: fonts.semibold, color: colors.text },
+  limitLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '500' },
+
+  presetRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  preset: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceStrong,
+  },
+  presetOn: { backgroundColor: colors.text },
+  presetValue: { fontSize: 16, fontFamily: fonts.semibold, color: colors.text },
+  presetLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '500' },
   altHint: { fontSize: 10, color: colors.textFaint, fontFamily: mono, marginTop: 3 },
   altNote: { fontSize: 12, color: colors.textMuted, lineHeight: 18, marginTop: spacing.md },
 
@@ -718,7 +773,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.text,
     textAlign: 'right',
-    fontVariant: ['tabular-nums'],
   },
 
   footnote: {

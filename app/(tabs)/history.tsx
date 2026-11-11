@@ -22,13 +22,12 @@ import {
   listTrips,
 } from '@/services/database';
 import { useSettings } from '@/state/SettingsContext';
-import { colors, font, mono, radius, spacing, speedColor } from '@/theme/theme';
+import { colors, font, mono, radius, spacing, speedColor, fonts } from '@/theme/theme';
 import {
   distanceUnitLabel,
   formatAccel,
   formatDistance,
   formatDuration,
-  formatMoney,
   formatNumber,
   formatTripDate,
   speedUnitLabel,
@@ -132,31 +131,7 @@ export default function HistoryScreen() {
               icon="arrow-down"
               tint={colors.descent}
             />
-            <StatTile
-              label="Combustible est."
-              value={formatNumber(totals.fuelL, 1)}
-              unit="L"
-              icon="water-outline"
-              tint={colors.amber}
-            />
           </StatGrid>
-
-          <GlassCard style={styles.costCard}>
-            <View>
-              <Text style={styles.costLabel}>GASTO ESTIMADO EN COMBUSTIBLE</Text>
-              <Text style={styles.costValue}>{formatMoney(totals.cost, settings.currency)}</Text>
-            </View>
-            <View style={styles.costSide}>
-              <Text style={styles.costSideLabel}>
-                {formatMoney(settings.fuelPrice, settings.currency)}/gal
-              </Text>
-              <Text style={styles.costSideHint}>
-                {totals.distanceM > 0
-                  ? `${((totals.fuelL / (totals.distanceM / 1000)) * 100).toFixed(1)} L/100 km`
-                  : '—'}
-              </Text>
-            </View>
-          </GlassCard>
 
           <SectionTitle>Últimos 14 días</SectionTitle>
           <GlassCard>
@@ -364,10 +339,9 @@ const styles = StyleSheet.create({
   costLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8, color: colors.textFaint },
   costValue: {
     fontSize: 30,
-    fontWeight: '300',
+    fontFamily: fonts.medium,
     color: colors.text,
     marginTop: 4,
-    fontVariant: ['tabular-nums'],
   },
   costSide: { alignItems: 'flex-end' },
   costSideLabel: { fontSize: 13, color: colors.amber, fontWeight: '700' },
@@ -391,7 +365,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     minWidth: 66,
   },
-  tripSpeedValue: { fontSize: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  tripSpeedValue: { fontSize: 20, fontFamily: fonts.medium },
   tripSpeedUnit: { fontSize: 9, color: colors.textFaint, fontWeight: '700' },
 
   tripStats: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },

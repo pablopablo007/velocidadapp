@@ -8,17 +8,11 @@
  *  - Autoblog Uruguay / prensa AR (test): 0-100 km/h ~10,6 s reales, Vmáx ~185-187 km/h,
  *    peso en orden de marcha 1.080 kg, consumo mixto 6,92 L/100 km
  *
- * Todo es editable desde la pestaña "Garaje": lo que no viene publicado por
- * fábrica (relaciones de caja) se marca como APROXIMADO y sirve solo para el
- * tacómetro estimado.
+ * Todo es editable desde la pestaña "Garaje". Solo hay cifras publicadas o
+ * medidas: no se guardan relaciones de caja ni rpm, porque sin conexión OBD-II
+ * la app no puede leerlas del carro y no muestra estimaciones como si fueran
+ * datos reales.
  */
-
-export type GearRatios = {
-  /** Relación de cada marcha (1ª → última). Aproximadas (caja MQ200 5F). */
-  gears: number[];
-  /** Relación del diferencial / grupo final. Aproximada. */
-  final: number;
-};
 
 export type Vehicle = {
   id: string;
@@ -47,12 +41,10 @@ export type Vehicle = {
   torqueNm: number;
   torqueRpm: number;
   torqueRpmTo: number;
-  redlineRpm: number;
 
   transmission: string;
   gearCount: number;
   drivetrain: string;
-  ratios: GearRatios;
 
   suspensionFront: string;
   suspensionRear: string;
@@ -118,13 +110,10 @@ export const POLO_TRACK_2026: Vehicle = {
   torqueNm: 155,
   torqueRpm: 3800,
   torqueRpmTo: 4000,
-  redlineRpm: 6200,
 
   transmission: 'Manual',
   gearCount: 5,
   drivetrain: 'Delantera (FWD)',
-  // APROXIMADAS: VW no publica el escalonamiento del Track. Ajustables en Garaje.
-  ratios: { gears: [3.77, 2.09, 1.32, 0.94, 0.72], final: 4.06 },
 
   suspensionFront: 'Independiente McPherson',
   suspensionRear: 'Eje de brazos longitudinales',
@@ -189,42 +178,6 @@ export function rollingCircumferenceM(v: Vehicle): number {
   const diameterMm = v.tire.rimIn * 25.4 + sidewallMm * 2;
   // ~2 % de deformación bajo carga respecto al diámetro geométrico.
   return (Math.PI * diameterMm * 0.98) / 1000;
-}
-
-/** km/h por cada 1.000 rpm en una marcha dada (índice 0 = 1ª). */
-export function kmhPer1000Rpm(v: Vehicle, gearIndex: number): number {
-  const gear = v.ratios.gears[gearIndex];
-  if (!gear) return 0;
-  const circ = rollingCircumferenceM(v);
-  // rpm rueda = rpm motor / (gear * final); m/min = rpm rueda * circ
-  return (1000 / (gear * v.ratios.final)) * circ * 0.06;
-}
-
-/**
- * Estima la marcha más probable y las rpm para una velocidad dada.
- * Heurística: elige la marcha más alta que mantenga el motor por encima de
- * ~1.500 rpm sin pasar del corte. Es una estimación, no telemetría real.
- */
-export function estimateGearAndRpm(
-  v: Vehicle,
-  kmh: number
-): { gear: number; rpm: number } | null {
-  if (kmh < 3) return null;
-  let best: { gear: number; rpm: number } | null = null;
-  for (let i = 0; i < v.ratios.gears.length; i++) {
-    const per1000 = kmhPer1000Rpm(v, i);
-    if (per1000 <= 0) continue;
-    const rpm = (kmh / per1000) * 1000;
-    if (rpm >= 1400 && rpm <= v.redlineRpm) best = { gear: i + 1, rpm };
-  }
-  if (best) return best;
-  // Fuera de rango: fija en 1ª o en la última.
-  const per1000First = kmhPer1000Rpm(v, 0);
-  if (kmh / per1000First < 1.4) {
-    return { gear: 1, rpm: Math.max(850, (kmh / per1000First) * 1000) };
-  }
-  const last = v.ratios.gears.length - 1;
-  return { gear: last + 1, rpm: (kmh / kmhPer1000Rpm(v, last)) * 1000 };
 }
 
 /**

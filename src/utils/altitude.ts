@@ -24,8 +24,8 @@ export function standardPressureKpa(altitudeM: number): number {
  * estándar (99 kPa, 25 °C). Un factor de 1,44 significa que en ese sitio el
  * motor entrega 1/1,44 de lo que daría al nivel del mar.
  */
-export function sae1349Factor(altitudeM: number, tempC = 20): number {
-  const pressure = standardPressureKpa(altitudeM);
+export function sae1349Factor(altitudeM: number, tempC = 20, pressureKpa?: number): number {
+  const pressure = pressureKpa ?? standardPressureKpa(altitudeM);
   const kelvin = tempC + 273.15;
   const factor = 1.18 * ((99 / pressure) * Math.sqrt(kelvin / 298)) - 0.18;
   // Acota el resultado: fuera del rango de validez de la norma deja de tener
@@ -37,6 +37,8 @@ export type AltitudeEffect = {
   altitudeM: number;
   tempC: number;
   pressureKpa: number;
+  /** De dónde sale la presión: el barómetro del iPhone o la atmósfera estándar. */
+  pressureSource: 'barometro' | 'estandar';
   factor: number;
   /** Potencia y par realmente disponibles a esa altitud. */
   powerCv: number;
@@ -50,12 +52,19 @@ export type AltitudeEffect = {
   target0100Max: number;
 };
 
+/**
+ * @param pressureKpa presión medida (barómetro del iPhone). Es más exacta que
+ *   deducirla de la altitud: incluye el tiempo que hace (borrasca, anticiclón).
+ */
 export function altitudeEffect(
   vehicle: Vehicle,
   altitudeM: number,
-  tempC = 20
+  tempC = 20,
+  pressureKpa?: number
 ): AltitudeEffect {
-  const factor = sae1349Factor(altitudeM, tempC);
+  const medida = pressureKpa != null && pressureKpa > 30 && pressureKpa < 110;
+  const pressure = medida ? pressureKpa : standardPressureKpa(altitudeM);
+  const factor = sae1349Factor(altitudeM, tempC, pressure);
   const powerCv = vehicle.powerCv / factor;
   const torqueNm = vehicle.torqueNm / factor;
 
@@ -67,7 +76,8 @@ export function altitudeEffect(
   return {
     altitudeM,
     tempC,
-    pressureKpa: standardPressureKpa(altitudeM),
+    pressureKpa: pressure,
+    pressureSource: medida ? 'barometro' : 'estandar',
     factor,
     powerCv,
     powerHp: (vehicle.powerHp / factor),
@@ -102,7 +112,31 @@ export const REFERENCE_ALTITUDES: { label: string; altitudeM: number }[] = [
   { label: 'Nivel del mar', altitudeM: 0 },
   { label: 'Guayaquil', altitudeM: 4 },
   { label: 'Santo Domingo', altitudeM: 550 },
+  { label: 'Azogues', altitudeM: 2518 },
+  { label: 'Cuenca', altitudeM: 2560 },
   { label: 'Ambato', altitudeM: 2577 },
   { label: 'Quito', altitudeM: 2850 },
   { label: 'Papallacta', altitudeM: 3300 },
+];
+
+/** Altitud de la presión medida, según la atmósfera estándar (inversa de standardPressureKpa). */
+export function pressureAltitudeM(pressureKpa: number): number {
+  return (1 - Math.pow(pressureKpa / 101.325, 1 / 5.25588)) / 2.25577e-5;
+}
+
+/**
+ * Tu ciudad. Cuenca está a unos 2.560 m y su temperatura media ronda los 15 °C;
+ * son las condiciones con las que se calcula la ficha "En Cuenca".
+ */
+export const HOME_CITY = { label: 'Cuenca', altitudeM: 2560, tempC: 15 } as const;
+
+/**
+ * Límites de velocidad para vehículos livianos en Ecuador (LOTTTSV). Sirven de
+ * atajo para el aviso: la señalización de cada vía manda.
+ */
+export const ECUADOR_LIMITS: { label: string; kmh: number }[] = [
+  { label: 'Urbano', kmh: 50 },
+  { label: 'Curva', kmh: 60 },
+  { label: 'Perimetral', kmh: 90 },
+  { label: 'Carretera', kmh: 100 },
 ];

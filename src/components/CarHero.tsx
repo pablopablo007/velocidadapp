@@ -1,11 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import React, { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 
+import { CarShowcase } from '@/components/CarShowcase';
 import { CarSpinner } from '@/components/CarSpinner';
-import { colors, font, radius, spacing } from '@/theme/theme';
+import { colors, radius, spacing } from '@/theme/theme';
 import { Vehicle } from '@/vehicles/polo';
 
 function greeting(date = new Date()): string {
@@ -22,16 +21,16 @@ type Props = {
   onPressOptions?: () => void;
 };
 
+/**
+ * Tarjeta del carro. Con fotos propias tomadas alrededor del carro gira en
+ * 360° al arrastrarla; sin ellas muestra la foto del Polo Track en 3D, que se
+ * inclina con el giroscopio.
+ */
 function CarHeroBase({ vehicle, frames, driverName, onPressOptions }: Props) {
   const saludo = driverName ? `${greeting()}, ${driverName}` : greeting();
 
   return (
-    <LinearGradient
-      colors={['#141C28', '#0A1018', '#06090E']}
-      start={{ x: 0.1, y: 0 }}
-      end={{ x: 0.9, y: 1 }}
-      style={styles.card}
-    >
+    <View style={styles.card}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.greeting}>{saludo}</Text>
@@ -39,7 +38,7 @@ function CarHeroBase({ vehicle, frames, driverName, onPressOptions }: Props) {
             {vehicle.model}
           </Text>
           <Text style={styles.trim} numberOfLines={1}>
-            {vehicle.trim} · {vehicle.powerCv} CV
+            {vehicle.year} · {vehicle.trim} · {vehicle.powerCv} CV
           </Text>
         </View>
         {onPressOptions && (
@@ -55,45 +54,38 @@ function CarHeroBase({ vehicle, frames, driverName, onPressOptions }: Props) {
         )}
       </View>
 
-      <View style={styles.stage}>
-        {/* Resplandor del piso: da la sensación de que el carro flota sobre la tarjeta */}
-        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-          <Defs>
-            <RadialGradient id="floorGlow" cx="50%" cy="72%" rx="52%" ry="34%">
-              <Stop offset="0" stopColor={colors.accent} stopOpacity="0.34" />
-              <Stop offset="0.6" stopColor={colors.accent} stopOpacity="0.10" />
-              <Stop offset="1" stopColor={colors.accent} stopOpacity="0" />
-            </RadialGradient>
-          </Defs>
-          <Ellipse cx="50%" cy="72%" rx="52%" ry="34%" fill="url(#floorGlow)" />
-        </Svg>
-
-        <CarSpinner frames={frames} height={190} />
-      </View>
-    </LinearGradient>
+      {frames.length > 0 ? (
+        <View style={styles.stage}>
+          <CarSpinner frames={frames} height={200} />
+        </View>
+      ) : (
+        <CarShowcase height={220} />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
+    backgroundColor: colors.surface,
     borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
     paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.sm,
     overflow: 'hidden',
   },
   header: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: spacing.xl },
-  greeting: { fontSize: 13, color: colors.accent, fontWeight: '600', letterSpacing: 0.2 },
+  greeting: { fontSize: 13, color: colors.textMuted, fontWeight: '500', letterSpacing: 0.2 },
   model: {
-    ...font.title,
-    fontSize: 38,
-    lineHeight: 42,
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: '700',
     color: colors.text,
-    letterSpacing: -1.2,
+    letterSpacing: -0.8,
     marginTop: 2,
   },
-  trim: { fontSize: 13, color: colors.textMuted, fontWeight: '600', marginTop: 3 },
+  trim: { fontSize: 13, color: colors.textMuted, fontWeight: '500', marginTop: 2 },
   optionsButton: {
     width: 36,
     height: 36,
@@ -102,7 +94,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stage: { marginTop: spacing.md, height: 190 },
+  stage: { marginTop: spacing.md, height: 200 },
 });
 
 export const CarHero = memo(CarHeroBase);

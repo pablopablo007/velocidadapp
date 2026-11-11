@@ -1,33 +1,37 @@
 /**
  * Paleta y tokens de diseño.
- * Look "racing": negro profundo, blanco puro y rojo de competición, como un
- * tablero deportivo. El rojo es la marca; el exceso de velocidad se distingue
- * porque tiñe toda la pantalla y enciende el marco, no solo un detalle.
+ *
+ * Look de tablero digital: grafito casi negro, paneles opacos con filos finos,
+ * blanco para lo que importa y un rojo de acento para el límite, la grabación y
+ * las marcas. Los tonos pastel (azul, verde, salmón) se reservan para datos
+ * secundarios, como en los tableros de referencia.
  */
 
 export const colors = {
-  bg: '#070708',
-  bgElevated: '#0E0E10',
-  surface: 'rgba(255,255,255,0.05)',
-  surfaceStrong: 'rgba(255,255,255,0.09)',
-  border: 'rgba(255,255,255,0.09)',
-  borderStrong: 'rgba(255,255,255,0.20)',
+  bg: '#0A0A0B',
+  bgElevated: '#111113',
+  surface: '#141416',
+  surfaceStrong: '#1C1C1F',
+  border: 'rgba(255,255,255,0.07)',
+  borderStrong: 'rgba(255,255,255,0.16)',
 
-  text: '#FFFFFF',
-  textMuted: '#A1A1AA',
-  textFaint: '#5C5C66',
+  text: '#F5F5F7',
+  textMuted: '#8E8E93',
+  textFaint: '#4A4A50',
 
-  accent: '#FF1E2D', // rojo de competición
-  accentDim: 'rgba(255,30,45,0.16)',
-  lime: '#32D74B', // "bien": marcas logradas, GPS preciso
-  amber: '#FFC21A',
-  danger: '#FF2D3A',
-  dangerDim: 'rgba(255,45,58,0.18)',
+  accent: '#FF2D46', // rojo de acento
+  accentDim: 'rgba(255,45,70,0.14)',
+  blue: '#8AB4F8',
+  lime: '#8BE3A0', // "bien": marcas logradas, GPS preciso, sensor activo
+  amber: '#FFD27F',
+  salmon: '#FFA49A',
+  danger: '#FF2D46',
+  dangerDim: 'rgba(255,45,70,0.16)',
 
-  ascent: '#FF8A1F', // subida
-  descent: '#5AC8FA', // bajada
+  ascent: '#FFA49A', // subida
+  descent: '#8AB4F8', // bajada
 
-  track: 'rgba(255,255,255,0.08)',
+  track: 'rgba(255,255,255,0.07)',
 } as const;
 
 export const radius = {
@@ -47,37 +51,52 @@ export const spacing = {
   xxl: 32,
 } as const;
 
-/** Fuente monoespaciada para números: evita que el ancho "baile" al cambiar de dígito. */
-export const mono = 'Menlo';
+/**
+ * Tipografía técnica para las cifras (Chakra Petch, cargada en app/_layout).
+ * Con una familia propia no se combina `fontWeight`: en iOS cada peso es una
+ * familia distinta y mezclarlos hace que caiga a la fuente del sistema.
+ */
+export const fonts = {
+  light: 'ChakraPetch_300Light',
+  regular: 'ChakraPetch_400Regular',
+  medium: 'ChakraPetch_500Medium',
+  semibold: 'ChakraPetch_600SemiBold',
+  bold: 'ChakraPetch_700Bold',
+} as const;
+
+/** Cifras pequeñas (precisión, presión, coordenadas). */
+export const mono = fonts.medium;
 
 export const font = {
-  huge: { fontSize: 88, fontWeight: '800' as const, fontStyle: 'italic' as const, letterSpacing: -3 },
-  display: { fontSize: 40, fontWeight: '700' as const, fontStyle: 'italic' as const, letterSpacing: -1 },
-  title: { fontSize: 22, fontWeight: '800' as const, fontStyle: 'italic' as const, letterSpacing: -0.4 },
-  section: { fontSize: 13, fontWeight: '700' as const, letterSpacing: 1.2 },
+  huge: { fontSize: 88, fontFamily: fonts.medium, letterSpacing: -2 },
+  display: { fontSize: 40, fontFamily: fonts.medium, letterSpacing: -0.5 },
+  title: { fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.4 },
+  section: { fontSize: 12, fontWeight: '600' as const, letterSpacing: 0.4 },
   body: { fontSize: 15, fontWeight: '500' as const },
   small: { fontSize: 12, fontWeight: '600' as const, letterSpacing: 0.4 },
 } as const;
 
 /**
  * Escala de color por velocidad (km/h). Se usa en el velocímetro y en la
- * polilínea del mapa para leer "de un vistazo" dónde ibas rápido.
+ * polilínea del mapa para leer "de un vistazo" dónde ibas rápido:
+ * azul suave al rodar despacio, blanco a velocidad de ciudad, salmón y rojo
+ * en carretera.
  */
 const SPEED_STOPS: [number, string][] = [
-  [0, '#F4F4F5'],
-  [50, '#FFE14D'],
-  [90, '#FFA51F'],
-  [130, '#FF5A2A'],
-  [170, '#FF1E2D'],
+  [0, '#8AB4F8'],
+  [45, '#F5F5F7'],
+  [85, '#FFD27F'],
+  [115, '#FFA49A'],
+  [150, '#FF2D46'],
 ];
 
-/** Mismo degradado, listo para un <LinearGradient> de SVG (blanco → amarillo → rojo). */
+/** Mismo degradado, listo para un <LinearGradient> de SVG. */
 export const SPEED_GRADIENT: [number, string][] = [
-  [0, '#F4F4F5'],
-  [0.35, '#FFE14D'],
-  [0.6, '#FFA51F'],
-  [0.8, '#FF5A2A'],
-  [1, '#FF1E2D'],
+  [0, '#8AB4F8'],
+  [0.3, '#F5F5F7'],
+  [0.55, '#FFD27F'],
+  [0.75, '#FFA49A'],
+  [1, '#FF2D46'],
 ];
 
 function hexToRgb(hex: string) {

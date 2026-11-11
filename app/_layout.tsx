@@ -1,4 +1,13 @@
+import {
+  ChakraPetch_300Light,
+  ChakraPetch_400Regular,
+  ChakraPetch_500Medium,
+  ChakraPetch_600SemiBold,
+  ChakraPetch_700Bold,
+  useFonts,
+} from '@expo-google-fonts/chakra-petch';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import React, { useEffect } from 'react';
@@ -9,20 +18,41 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // expo-task-manager: `defineTask` debe ejecutarse antes de que iOS la invoque).
 import '@/services/backgroundLocation';
 
+import { SensorsProvider } from '@/state/SensorsContext';
 import { SettingsProvider } from '@/state/SettingsContext';
 import { TrackingProvider } from '@/state/TrackingContext';
 import { colors } from '@/theme/theme';
 
+// La pantalla de carga se queda hasta tener la tipografía: si no, las cifras
+// aparecerían un instante con la fuente del sistema y luego saltarían.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    ChakraPetch_300Light,
+    ChakraPetch_400Regular,
+    ChakraPetch_500Medium,
+    ChakraPetch_600SemiBold,
+    ChakraPetch_700Bold,
+  });
+
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) SplashScreen.hideAsync().catch(() => {});
+  }, [fontsLoaded, fontError]);
+
+  // Si la fuente falla (sin espacio, archivo dañado) la app sigue con la del sistema.
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>
         <SettingsProvider>
           <TrackingProvider>
+            <SensorsProvider>
             <StatusBar style="light" />
             <Stack
               screenOptions={{
@@ -40,6 +70,7 @@ export default function RootLayout() {
                 options={{ presentation: 'card', animation: 'slide_from_right' }}
               />
             </Stack>
+            </SensorsProvider>
           </TrackingProvider>
         </SettingsProvider>
       </SafeAreaProvider>

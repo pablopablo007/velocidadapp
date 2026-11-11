@@ -26,8 +26,9 @@ import { LatLng, simplify } from '@/utils/geo';
 export type TrackingStatus = 'idle' | 'recording' | 'paused';
 export type PermissionState = 'unknown' | 'granted' | 'denied' | 'background';
 
-/** Litros por galón: los precios de combustible en Ecuador se cotizan por galón. */
-const L_PER_GALLON = 3.78541;
+/** Velocidad y tiempo sostenidos para que un viaje automático empiece. */
+const AUTO_START_KMH = 12;
+const AUTO_START_MS = 6000;
 
 type Ctx = {
   status: TrackingStatus;
@@ -82,6 +83,14 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   const pathBufferRef = useRef<TrackPoint[]>([]);
   const pathTickRef = useRef(0);
   const overLimitRef = useRef(false);
+  // Viajes automáticos: desde cuándo vas rápido (para arrancar) y desde
+  // cuándo estás quieto (para cerrar), y referencias a start/stop porque se
+  // declaran más abajo que handleFix.
+  const fastSinceRef = useRef<number | null>(null);
+  const stillSinceRef = useRef<number | null>(null);
+  const savingRef = useRef(false);
+  const startRef = useRef<(() => Promise<void>) | null>(null);
+  const stopRef = useRef<(() => Promise<string | null>) | null>(null);
 
   const settingsRef = useRef(settings);
   useEffect(() => {
@@ -157,6 +166,35 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     } else if (overLimitRef.current) {
       overLimitRef.current = false;
       setOverLimit(false);
+    }
+
+    // --- viajes automáticos ---
+    const { autoTrips, autoStopMinutes } = settingsRef.current;
+    const kmhNow = ambientStats.speedKmh;
+    if (kmhNow >= 3) stillSinceRef.current = null;
+    else if (stillSinceRef.current == null) stillSinceRef.current = now;
+
+    if (autoTrips && !savingRef.current) {
+      if (statusRef.current === 'idle') {
+        if (kmhNow >= AUTO_START_KMH) {
+          if (fastSinceRef.current == null) fastSinceRef.current = now;
+          else if (now - fastSinceRef.current >= AUTO_START_MS) {
+            fastSinceRef.current = null;
+            startRef.current?.().catch(() => {});
+            return;
+          }
+        } else {
+          fastSinceRef.current = null;
+        }
+      } else if (
+        stillSinceRef.current != null &&
+        now - stillSinceRef.current >= autoStopMinutes * 60_000
+      ) {
+        // Llegaste: lleva el rato configurado detenido. Se guarda solo.
+        stillSinceRef.current = null;
+        stopRef.current?.().catch(() => {});
+        return;
+      }
     }
 
     const engine = tripRef.current;
@@ -378,6 +416,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     }
 
     setSavingTrip(true);
+    savingRef.current = true;
     try {
       const last = engine.lastPoint;
       const endLabel = last ? await reverseGeocode(last.lat, last.lon).catch(() => null) : null;
@@ -390,8 +429,6 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         4
       ).map(({ latitude: _lat, longitude: _lon, ...p }) => p);
 
-      const litres = stats.fuelL;
-      const cost = (litres / L_PER_GALLON) * cfg.fuelPrice;
 
       await saveTrip({
         id,
@@ -409,8 +446,10 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         minAlt: stats.minAlt,
         startLabel: startLabelRef.current,
         endLabel,
-        fuelL: litres,
-        cost,
+        // El consumo es un modelo, no una lectura del carro: se guarda por
+        // compatibilidad con la base de datos pero la app no lo muestra.
+        fuelL: stats.fuelL,
+        cost: 0,
         perf: stats.perf,
         note: null,
         analysis: stats.analysis,
@@ -428,8 +467,14 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       return null;
     } finally {
       setSavingTrip(false);
+      savingRef.current = false;
     }
   }, [cleanupTrip]);
+
+  useEffect(() => {
+    startRef.current = start;
+    stopRef.current = stop;
+  }, [start, stop]);
 
   const discard = useCallback(() => {
     cleanupTrip();

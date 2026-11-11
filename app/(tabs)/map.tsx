@@ -1,16 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SpeedTrace } from '@/components/SpeedTrace';
-import { Badge, PrimaryButton } from '@/components/ui';
+import { Badge } from '@/components/ui';
 import { MapStyle, useSettings } from '@/state/SettingsContext';
 import { useTracking } from '@/state/TrackingContext';
-import { colors, mono, radius, spacing, speedColor } from '@/theme/theme';
+import { colors, fonts, mono, radius, spacing, speedColor } from '@/theme/theme';
 import {
   formatDistance,
   formatDuration,
@@ -30,10 +29,9 @@ const MAP_STYLE_ICON: Record<MapStyle, React.ComponentProps<typeof Ionicons>['na
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { settings, update } = useSettings();
-  const { status, live, trip, path, position, overLimit, start, pause, resume, stop, discard } =
-    useTracking();
+  // El viaje se controla solo desde Velocidad: aquí se ve, no se maneja.
+  const { status, live, trip, path, position, overLimit } = useTracking();
 
   const mapRef = useRef<MapView | null>(null);
   const [following, setFollowing] = useState(true);
@@ -78,20 +76,6 @@ export default function MapScreen() {
     const i = MAP_STYLES.indexOf(settings.mapStyle);
     update({ mapStyle: MAP_STYLES[(i + 1) % MAP_STYLES.length] });
   }, [settings.mapStyle, update]);
-
-  const handleStop = () => {
-    Alert.alert('Finalizar viaje', '¿Guardar este viaje en el historial?', [
-      { text: 'Seguir grabando', style: 'cancel' },
-      { text: 'Descartar', style: 'destructive', onPress: discard },
-      {
-        text: 'Guardar',
-        onPress: async () => {
-          const id = await stop();
-          if (id) router.push(`/trip/${id}`);
-        },
-      },
-    ]);
-  };
 
   const startPoint = path.length > 0 ? path[0] : null;
   const speedTint = overLimit ? colors.danger : speedColor(live.speedKmh);
@@ -185,7 +169,7 @@ export default function MapScreen() {
           <PanelStat
             label="Máxima"
             value={`${formatNumber(toDisplaySpeed(shown.maxSpeedKmh, unit))}`}
-            tint={colors.lime}
+            tint={colors.accent}
           />
           <PanelStat
             label="Desnivel"
@@ -194,29 +178,13 @@ export default function MapScreen() {
           />
         </View>
 
-        <View style={styles.panelControls}>
-          {status === 'idle' ? (
-            <PrimaryButton label="Iniciar viaje" icon="play" onPress={start} style={{ flex: 1 }} />
-          ) : (
-            <>
-              <PrimaryButton
-                label={status === 'paused' ? 'Reanudar' : 'Pausar'}
-                icon={status === 'paused' ? 'play' : 'pause'}
-                onPress={status === 'paused' ? resume : pause}
-                tint={colors.amber}
-                variant="outline"
-                style={{ flex: 1 }}
-              />
-              <PrimaryButton
-                label="Finalizar"
-                icon="stop"
-                onPress={handleStop}
-                tint={colors.danger}
-                style={{ flex: 1 }}
-              />
-            </>
-          )}
-        </View>
+        <Text style={styles.panelHint}>
+          {status !== 'idle'
+            ? 'El viaje se pausa y se termina desde la pestaña Velocidad.'
+            : settings.autoTrips
+              ? 'Viaje automático: empieza solo al arrancar.'
+              : 'Inicia el viaje desde la pestaña Velocidad.'}
+        </Text>
       </BlurView>
     </View>
   );
@@ -243,7 +211,7 @@ function FloatingButton({
 function PanelStat({ label, value, tint = colors.text }: { label: string; value: string; tint?: string }) {
   return (
     <View style={styles.panelStat}>
-      <Text style={styles.panelStatLabel}>{label.toUpperCase()}</Text>
+      <Text style={styles.panelStatLabel}>{label.toLowerCase()}</Text>
       <Text style={[styles.panelStatValue, { color: tint }]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
@@ -273,9 +241,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: 'rgba(5,7,11,0.45)',
+    backgroundColor: 'rgba(10,10,11,0.55)',
   },
-  hudSpeed: { fontSize: 42, fontWeight: '300', letterSpacing: -1.5, fontVariant: ['tabular-nums'] },
+  hudSpeed: { fontSize: 42, fontFamily: fonts.medium, letterSpacing: -1 },
   hudUnit: { fontSize: 11, color: colors.textMuted, fontWeight: '700', letterSpacing: 1 },
   hudAlt: { fontSize: 11, color: colors.textFaint, fontFamily: mono, marginTop: 2 },
 
@@ -289,7 +257,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: 'rgba(5,7,11,0.5)',
+    backgroundColor: 'rgba(10,10,11,0.6)',
   },
 
   startMarker: {
@@ -313,17 +281,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderTopWidth: 1,
     borderColor: colors.border,
-    backgroundColor: 'rgba(5,7,11,0.55)',
+    backgroundColor: 'rgba(10,10,11,0.7)',
     gap: spacing.md,
   },
   panelStats: { flexDirection: 'row', gap: spacing.sm },
   panelStat: { flex: 1 },
-  panelStatLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8, color: colors.textFaint },
-  panelStatValue: {
-    fontSize: 17,
-    fontWeight: '700',
-    marginTop: 3,
-    fontVariant: ['tabular-nums'],
-  },
-  panelControls: { flexDirection: 'row', gap: spacing.sm },
+  panelStatLabel: { fontSize: 11, fontWeight: '500', color: colors.textMuted },
+  panelStatValue: { fontSize: 18, fontFamily: fonts.medium, marginTop: 2 },
+  panelHint: { fontSize: 11, color: colors.textMuted, textAlign: 'center' },
 });

@@ -17,8 +17,17 @@ export type Settings = {
   /** Pausa el viaje solo cuando el carro lleva rato detenido. */
   autoPause: boolean;
   autoPauseSeconds: number;
-  fuelPrice: number;
-  currency: string;
+  /**
+   * Viajes automáticos: el viaje empieza solo al arrancar y se guarda solo
+   * tras `autoStopMinutes` detenido. Así no hay que tocar el teléfono al volante.
+   */
+  autoTrips: boolean;
+  autoStopMinutes: number;
+  /**
+   * Temperatura del aire para la corrección de potencia. El iPhone no tiene
+   * termómetro exterior, así que se fija aquí (Cuenca ronda los 15 °C).
+   */
+  airTempC: number;
   mapStyle: MapStyle;
   followHeading: boolean;
   vehicle: Vehicle;
@@ -27,14 +36,15 @@ export type Settings = {
 const DEFAULTS: Settings = {
   driverName: '',
   unit: 'kmh',
-  speedLimit: 100,
+  speedLimit: 50, // urbano en Ecuador
   speedAlertEnabled: true,
   hapticsEnabled: true,
   keepAwake: true,
   autoPause: true,
   autoPauseSeconds: 90,
-  fuelPrice: 2.4, // USD por galón (Ecuador, extra/ecopaís)
-  currency: '$',
+  autoTrips: true,
+  autoStopMinutes: 10,
+  airTempC: 15,
   mapStyle: 'mutedStandard',
   followHeading: true,
   vehicle: POLO_TRACK_2026,

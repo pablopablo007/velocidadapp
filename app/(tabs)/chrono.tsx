@@ -7,15 +7,14 @@ import {
   Badge,
   Divider,
   GlassCard,
-  PrimaryButton,
   SectionTitle,
   StatGrid,
   StatTile,
 } from '@/components/ui';
-import { useChronometer } from '@/hooks/useChronometer';
+import { useSensors } from '@/state/SensorsContext';
 import { useSettings } from '@/state/SettingsContext';
 import { useTracking } from '@/state/TrackingContext';
-import { colors, font, mono, radius, spacing } from '@/theme/theme';
+import { colors, font, mono, radius, spacing, fonts } from '@/theme/theme';
 import { altitudeEffect, compare0100 } from '@/utils/altitude';
 import {
   formatAccel,
@@ -32,7 +31,6 @@ export default function ChronoScreen() {
   const insets = useSafeAreaInsets();
   const { settings } = useSettings();
   const { live, trip } = useTracking();
-  const chrono = useChronometer();
 
   const unit = settings.unit;
   const unitLabel = speedUnitLabel(unit);
@@ -43,10 +41,12 @@ export default function ChronoScreen() {
 
   // El dato de fábrica está medido al nivel del mar. Compararse contra él en
   // altura solo produce frustración, así que el objetivo se corrige primero.
+  const { baro } = useSensors();
+  const pressureKpa = baro.pressureHpa != null ? Math.round(baro.pressureHpa) / 10 : undefined;
   const effect = useMemo(() => {
     if (live.altitude == null) return null;
-    return altitudeEffect(vehicle, Math.round(live.altitude / 50) * 50);
-  }, [vehicle, live.altitude]);
+    return altitudeEffect(vehicle, Math.round(live.altitude / 50) * 50, settings.airTempC, pressureKpa);
+  }, [vehicle, live.altitude, settings.airTempC, pressureKpa]);
 
   const verdict = useMemo(
     () => (effect ? compare0100(best.t0_100, effect) : null),
@@ -65,51 +65,7 @@ export default function ChronoScreen() {
       }}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.screenTitle}>Cronómetro</Text>
-
-      {/* ------------------ cronómetro manual ------------------ */}
-      <GlassCard style={styles.chronoCard}>
-        <Text style={styles.chronoValue} allowFontScaling={false} numberOfLines={1}>
-          {formatStopwatch(chrono.elapsed)}
-        </Text>
-        <View style={styles.chronoButtons}>
-          <PrimaryButton
-            label={chrono.running ? 'Vuelta' : 'Reiniciar'}
-            icon={chrono.running ? 'flag' : 'refresh'}
-            onPress={chrono.running ? chrono.lap : chrono.reset}
-            variant="ghost"
-            tint={colors.textMuted}
-            style={{ flex: 1 }}
-          />
-          <PrimaryButton
-            label={chrono.running ? 'Parar' : chrono.elapsed > 0 ? 'Seguir' : 'Iniciar'}
-            icon={chrono.running ? 'pause' : 'play'}
-            onPress={chrono.toggle}
-            tint={chrono.running ? colors.danger : colors.lime}
-            style={{ flex: 1 }}
-          />
-        </View>
-      </GlassCard>
-
-      {chrono.laps.length > 0 && (
-        <>
-          <SectionTitle right={<Badge label={`${chrono.laps.length} VUELTAS`} />}>
-            Vueltas
-          </SectionTitle>
-          <GlassCard padded={false}>
-            {chrono.laps.map((lap, i) => (
-              <View key={lap.index}>
-                {i > 0 && <Divider />}
-                <View style={styles.lapRow}>
-                  <Text style={styles.lapIndex}>#{lap.index}</Text>
-                  <Text style={styles.lapSplit}>{formatStopwatch(lap.splitMs)}</Text>
-                  <Text style={styles.lapTotal}>{formatStopwatch(lap.totalMs)}</Text>
-                </View>
-              </View>
-            ))}
-          </GlassCard>
-        </>
-      )}
+      <Text style={styles.screenTitle}>Crono automático</Text>
 
       {/* ------------------ modo arrancada ------------------ */}
       <SectionTitle
@@ -321,9 +277,8 @@ const styles = StyleSheet.create({
   chronoCard: { alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.xl },
   chronoValue: {
     fontSize: 52,
-    fontWeight: '200',
+    fontFamily: fonts.medium,
     color: colors.text,
-    fontVariant: ['tabular-nums'],
     letterSpacing: -1.5,
   },
   chronoButtons: { flexDirection: 'row', gap: spacing.sm, alignSelf: 'stretch' },
@@ -348,9 +303,8 @@ const styles = StyleSheet.create({
   },
   dragLiveValue: {
     fontSize: 46,
-    fontWeight: '200',
+    fontFamily: fonts.medium,
     color: colors.accent,
-    fontVariant: ['tabular-nums'],
   },
   dragLiveUnit: { fontSize: 14, color: colors.textMuted, fontWeight: '700' },
 
@@ -363,13 +317,12 @@ const styles = StyleSheet.create({
   targetLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8, color: colors.textFaint },
   targetValue: {
     fontSize: 30,
-    fontWeight: '300',
+    fontFamily: fonts.medium,
     color: colors.text,
     marginTop: 3,
-    fontVariant: ['tabular-nums'],
   },
   targetUnit: { fontSize: 14, color: colors.textMuted, fontWeight: '700' },
-  targetPower: { fontSize: 20, fontWeight: '700', color: colors.amber, fontVariant: ['tabular-nums'] },
+  targetPower: { fontSize: 20, fontWeight: '700', color: colors.amber },
   targetHint: { fontSize: 10, color: colors.textFaint, fontFamily: mono, marginTop: 3 },
   targetNote: { fontSize: 12, color: colors.textMuted, lineHeight: 18, marginTop: spacing.md },
 

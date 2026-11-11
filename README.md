@@ -19,57 +19,58 @@ React Native + Expo SDK 58. Uso personal.
 
 ## Qué hace
 
-**Velocímetro** — Dial analógico dibujado en SVG con aguja, arco de color según la
-velocidad, zona roja a partir de la velocidad máxima del carro, marca de la velocidad
-punta de la sesión y marca del límite que configures. La lectura viene de la velocidad
-Doppler del receptor GPS, no de derivar posiciones, así que responde de inmediato.
-Encima, una tira de cambio de marcha que pasa de verde a rojo al acercarse al corte;
-debajo, el carro corriendo con las ruedas girando a las vueltas que de verdad daría la
-rueda a esa velocidad y el morro cabeceando al frenar y acelerar. Y una cinta con la
-velocidad del último minuto.
+**Todo lo que muestra es medido.** Sin conexión al carro (OBD-II) no se pueden leer rpm,
+marcha ni consumo, así que la app no los muestra ni los inventa. Lo que se calcula (la
+potencia según el aire) dice de qué medida sale.
 
-**Potencia real según la altitud** — El 1.6 MSI es atmosférico: respira el aire que haya.
-La app aplica el factor de corrección **SAE J1349** a la altitud a la que estás y te dice
-cuántos CV tienes de verdad — en Quito son unos 77 de los 110, un 30 % menos. Con eso
-calcula el 0-100 que cabe esperar ahí (~14 s, no los 10,0 s de fábrica, medidos al nivel
-del mar) y compara tus marcas contra ese objetivo en vez de contra un número imposible.
+**Cabina** — Tablero digital en grafito, blanco y rojo, con cifras en Chakra Petch. Dial con
+banda oscura, marcas que se encienden al pasar la velocidad, muesca roja en el límite y
+punto en la máxima de la sesión. Debajo: altitud, círculo de fuerzas G y potencia
+disponible; distancia, tiempo y máxima; pendiente y rumbo. **Al girar el iPhone** el
+tablero pasa a pantalla completa (sin barra de pestañas ni de estado): dial al centro,
+altitud y distancia a la izquierda, fuerzas G y tiempo a la derecha, barras abajo.
 
-**Análisis de velocidad** — Además de la media y la máxima:
-*máxima sostenida* (la mayor que mantuviste 5 segundos, inmune a un pico falso del GPS),
-*percentil 85* (el criterio con el que los ingenieros de tránsito fijan límites: la
-velocidad por debajo de la cual circulaste el 85 % del tiempo), *histograma* del reparto
-del tiempo por rango de velocidad, y *tiempo por encima del límite*.
+**Sensores del iPhone 15 Pro** —
+- *GPS L1 + L5*: velocidad Doppler (no restando posiciones), altitud, rumbo y traza.
+- *Giroscopio y acelerómetro*: la aceleración lateral real en curva, `a = v · ω`, con el
+  giro proyectado sobre la gravedad, así que da igual cómo esté puesto el teléfono.
+- *Barómetro*: la presión real del aire, con la que se corrige la potencia.
+- *Brújula*: el rumbo con el carro parado, cuando el GPS no puede darlo.
 
-**Altitud y descensos** — Altitud sobre el nivel del mar, pendiente instantánea en % con
-indicador de subida/bajada, y desnivel acumulado separado en ascenso (D+) y descenso (D−).
-En el detalle de cada viaje hay un perfil de elevación completo.
+En Análisis hay una lista con el estado de cada sensor en vivo.
 
-**Mapa en vivo** — El recorrido se traza coloreado por velocidad: de un vistazo ves dónde
-ibas rápido y dónde te frenaste. Cámara que te sigue con el mapa orientado al rumbo e
-inclinado, tres estilos de mapa y HUD flotante con velocidad y altitud.
+**Tu Polo en Cuenca** — El 1.6 MSI es atmosférico. En Cuenca (~2.560 m, ~741 hPa, 15 °C)
+la norma **SAE J1349** le deja unos **80 CV de 110** (−27 %) y un 0-100 esperable de
+**13,0 a 13,7 s**, no los 10,0 s de fábrica medidos al nivel del mar. Con el barómetro
+la cuenta usa la presión de ese momento, no la de una atmósfera estándar.
 
-**Cronómetro** — Cronómetro manual con vueltas, y un modo arrancada que mide solo, sin
-tocar nada: 0-60, 0-100, frenada 100-0, 201 m y 402 m con velocidad en meta. Y
-**recuperaciones en marcha** (60→100 y 80→120 sin detenerte), que es lo que de verdad
-usas para adelantar y lo que mejor describe al carro en altura.
+**Viajes automáticos** — El viaje empieza solo al pasar de 12 km/h durante 6 s y se
+guarda solo tras 10 minutos detenido (ajustable). El único control manual está en la
+pestaña Velocidad; Mapa y Crono solo lo muestran.
 
-**Historial y dashboard** — Resumen de todo: kilómetros, horas al volante, récord de
-velocidad, desnivel total, combustible y gasto estimado, barras de distancia de los
-últimos 14 días y tus mejores marcas. Cada viaje guarda de dónde a dónde fuiste (con
-nombre del lugar), tiempo total, tiempo en marcha y detenido, medias, gráfica de
-velocidad, perfil de elevación y consumo estimado.
+**Límites de Ecuador** — Atajos para el aviso de velocidad: urbano 50, curva 60,
+perimetral 90 y carretera 100 km/h (vehículos livianos).
 
-**Tarjeta del carro** — Saludo, nombre y versión sobre una foto de tu carro flotando en un
-resplandor. Si le pones varias fotos tomadas caminando alrededor, la tarjeta **gira 360°**
-al arrastrarla: es el mismo truco de los visores de las marcas, una secuencia de fotos, no
-un modelo 3D. Sin fotos muestra una ilustración. Las imágenes se reescalan y **se quedan en
-el teléfono**.
+**Análisis de velocidad** — Además de la media y la máxima: *máxima sostenida* (la mayor
+que mantuviste 5 segundos, inmune a un pico falso del GPS), *percentil 85*, histograma y
+tiempo por encima del límite.
 
-**Garaje** — Ficha técnica completa del Polo Track 1.6 MSI agrupada por motor, transmisión,
-chasis y frenos, seguridad y carrocería; toda editable. Incluye la potencia disponible aquí
-y ahora, y una tabla de cuánto entregaría el motor desde Guayaquil hasta Papallacta. Más
-los ajustes de la app: unidades, límite de velocidad, vibración, pausa automática, precio
-del combustible.
+**Altitud y descensos** — Altitud, pendiente instantánea y desnivel acumulado (D+ y D−),
+con perfil de elevación en cada viaje.
+
+**Mapa en vivo** — Recorrido coloreado por velocidad (azul despacio, blanco en ciudad,
+salmón y rojo en carretera), cámara que te sigue orientada al rumbo y tres estilos.
+
+**Crono automático** — Mide solo, sin botones: 0-60, 0-100, frenada 100-0, 201 m y 402 m
+con velocidad en meta, y recuperaciones 60→100 y 80→120.
+
+**Tu carro en 3D** — La foto del Polo Track sin fondo, con foco de luz, reflejo en el piso
+y una perspectiva que sigue la inclinación del iPhone (giroscopio); también se gira con el
+dedo. Si le pones tus propias fotos alrededor del carro, la tarjeta gira 360°.
+
+**Historial y Garaje** — Kilómetros, horas, récords y desnivel; ficha técnica completa del
+Polo Track 1.6 MSI, editable; temperatura del aire (el iPhone no tiene termómetro
+exterior) y el resto de ajustes.
 
 ---
 
@@ -99,6 +100,7 @@ Otros comandos:
 npm run typecheck      # comprueba tipos
 npm run test:engine    # simulación de conducción contra el motor de cálculo
 npm run preview:gauge  # dibuja el velocímetro en un HTML, para verlo sin el teléfono
+python tools/recortar-foto.py foto.jpg assets/images/polo-track.png  # quita el fondo blanco a otra foto
 npm run icons          # regenera los iconos de la app
 ```
 
@@ -106,11 +108,13 @@ npm run icons          # regenera los iconos de la app
 
 ## Cómo usarla en el carro
 
-1. Pon el iPhone en el soporte y abre la app. El velocímetro funciona sin pulsar nada.
-2. Cuando arranques el viaje, pulsa **Iniciar viaje** (en Velocidad o en Mapa).
-3. Conduce. La pantalla se queda encendida sola y, si te detienes más de 90 segundos, el
-   viaje se pausa y se reanuda al arrancar de nuevo.
-4. Al llegar, **Finalizar** → el viaje queda en el Historial con su mapa y sus gráficas.
+1. Pon el iPhone en el soporte y abre la app. El velocímetro funciona sin pulsar nada;
+   en horizontal se ve a pantalla completa.
+2. Arranca. Con los viajes automáticos el viaje empieza solo; si los desactivas en el
+   Garaje, pulsa **Iniciar viaje** en Velocidad.
+3. Conduce. La pantalla se queda encendida y, si te detienes más de 90 segundos, el viaje
+   se pausa y se reanuda al arrancar.
+4. Al llegar, el viaje se guarda solo tras 10 minutos parado, o al pulsar **Fin**.
 
 Concede el permiso de ubicación **«Siempre»** cuando lo pida: sin él la grabación se corta
 al bloquear el iPhone. Puedes cambiarlo luego en Garaje › Permisos.
@@ -207,15 +211,15 @@ falso, percentiles y recuperación en marcha. Las 40 comprobaciones pasan.
 
 ## Límites honestos
 
-- El **consumo y el gasto son estimados**, no leídos del carro. Salen de un modelo basado
-  en el consumo declarado, la velocidad media y las aceleraciones registradas. Sirven para
-  comparar viajes entre sí; el computador de a bordo manda.
-- Las **rpm y la marcha son estimadas** a partir de la medida de la llanta y unas
-  relaciones de caja aproximadas. No hay conexión OBD-II, así que la tira de cambio es una
-  guía, no un tacómetro.
-- La **corrección por altitud** usa la atmósfera estándar y una temperatura fija de 20 °C.
-  Un día muy caluroso resta algo más de potencia; un día frío, algo menos. El orden de
-  magnitud sí es correcto y coincide con la regla práctica de 3 % por cada 1.000 pies.
+- **No hay rpm, marcha ni consumo.** Sin conexión OBD-II al carro no se pueden leer, y
+  la app prefiere no mostrarlos a mostrar una estimación como si fuera un dato.
+- La **corrección de potencia** usa la presión real del barómetro (o la atmósfera
+  estándar si no hay lectura) y la temperatura que pongas en el Garaje (15 °C por
+  defecto, la media de Cuenca): el iPhone no tiene termómetro exterior.
+- La **curva en g** necesita velocidad: por debajo de ~5 km/h se muestra 0, porque ahí el
+  giro del teléfono no es una curva del carro.
+- La **brújula** da el rumbo hacia donde apunta el iPhone; con el carro parado sirve de
+  referencia, en marcha manda el rumbo del GPS.
 - Los **tiempos de aceleración** son medidos por GPS: el margen típico es de una a dos
   décimas. Valen para comparar tus propias pasadas, no como cifras de banco de pruebas.
 - El **seguimiento en segundo plano** funciona mientras iOS mantenga viva la app. Si el

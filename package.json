@@ -14,6 +14,7 @@
     "preview:gauge": "tsc -p tools/tsconfig.sim.json && node tools/preview-gauge.js"
   },
   "dependencies": {
+    "@expo-google-fonts/chakra-petch": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~58.0.0",
@@ -30,6 +31,7 @@
     "expo-linking": "~58.0.17",
     "expo-location": "~58.0.21",
     "expo-router": "~58.0.31",
+    "expo-sensors": "~58.0.5",
     "expo-splash-screen": "~58.0.14",
     "expo-sqlite": "~58.0.16",
     "expo-status-bar": "~58.0.5",
