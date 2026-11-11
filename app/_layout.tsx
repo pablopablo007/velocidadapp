@@ -18,6 +18,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // expo-task-manager: `defineTask` debe ejecutarse antes de que iOS la invoque).
 import '@/services/backgroundLocation';
 
+import { CarPlaySync } from '@/state/CarPlaySync';
 import { SensorsProvider } from '@/state/SensorsContext';
 import { SettingsProvider } from '@/state/SettingsContext';
 import { TrackingProvider } from '@/state/TrackingContext';
@@ -53,6 +54,7 @@ export default function RootLayout() {
         <SettingsProvider>
           <TrackingProvider>
             <SensorsProvider>
+            <CarPlaySync />
             <StatusBar style="light" />
             <Stack
               screenOptions={{

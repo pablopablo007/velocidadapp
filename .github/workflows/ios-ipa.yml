@@ -1,0 +1,91 @@
+# Compila la app de iOS en un Mac de GitHub y entrega un .ipa SIN FIRMAR.
+#
+# Se firma después, con tu cuenta (Sideloadly, AltStore, Xcode o `codesign` con tu
+# certificado y perfil). Para que aparezca en CarPlay, el perfil de
+# aprovisionamiento tiene que incluir el permiso com.apple.developer.carplay-driving-task,
+# que Apple concede a pedido; el archivo Velocidad.entitlements va junto al .ipa.
+#
+# Se lanza a mano (Actions › iOS .ipa › Run workflow) o al subir una etiqueta v*.
+name: iOS .ipa
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app || true
+          xcodebuild -version
+
+      - name: Dependencias
+        run: npm ci
+
+      - name: Comprobaciones (tipos, lint, motor de cálculo)
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test:engine
+
+      - name: Generar el proyecto iOS (prebuild + CocoaPods)
+        env:
+          CI: 1
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Compilar en Release sin firmar
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace ios/Velocidad.xcworkspace \
+            -scheme Velocidad \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Velocidad.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            archive | tee "$RUNNER_TEMP/xcodebuild.log" | grep -E "error:|warning: .*CarPlay|\*\* ARCHIVE" || true
+          test -d "$RUNNER_TEMP/Velocidad.xcarchive/Products/Applications/Velocidad.app"
+
+      - name: Empaquetar el .ipa
+        run: |
+          OUT="$RUNNER_TEMP/salida"
+          mkdir -p "$OUT/Payload"
+          cp -R "$RUNNER_TEMP/Velocidad.xcarchive/Products/Applications/Velocidad.app" "$OUT/Payload/"
+          (cd "$OUT" && zip -qry Velocidad-sin-firmar.ipa Payload && rm -rf Payload)
+          cp ios/Velocidad/Velocidad.entitlements "$OUT/"
+          /usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest" "$RUNNER_TEMP/Velocidad.xcarchive/Products/Applications/Velocidad.app/Info.plist"
+          ls -la "$OUT"
+
+      - name: Subir el .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: Velocidad-ipa
+          path: ${{ runner.temp }}/salida/*
+          retention-days: 30
+
+      - name: Registro de compilación (si falla)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          retention-days: 7

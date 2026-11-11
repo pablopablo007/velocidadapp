@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "velocidad",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#070708",
+    "backgroundColor": "#0A0A0B",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.pablo.velocidadapp",
@@ -19,7 +19,7 @@
         ],
         "NSLocationWhenInUseUsageDescription": "Velocidad usa el GPS para medir tu velocidad, altitud y trazar el recorrido de tus viajes en tiempo real.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Permite que Velocidad siga registrando el viaje aunque la pantalla esté apagada o uses otra app.",
-        "NSMotionUsageDescription": "Se usa para mejorar la precisión de la velocidad y detectar cuándo el carro está detenido.",
+        "NSMotionUsageDescription": "Velocidad usa el giroscopio y el barómetro del iPhone para medir las curvas en g y la presión del aire con la que se calcula la potencia del motor.",
         "NSPhotoLibraryUsageDescription": "Para elegir las fotos de tu carro y armar la tarjeta del garaje. Las fotos se quedan en tu teléfono.",
         "NSCameraUsageDescription": "Para tomar las fotos de tu carro y armar la tarjeta del garaje.",
         "ITSAppUsesNonExemptEncryption": false
@@ -33,7 +33,11 @@
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION"
-      ]
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0A0A0B"
+      }
     },
     "plugins": [
       "expo-router",
@@ -50,13 +54,14 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#070708",
+          "backgroundColor": "#0A0A0B",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 180,
+          "imageWidth": 200,
           "resizeMode": "contain"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "./plugins/withCarPlay"
     ],
     "experiments": {
       "typedRoutes": true
