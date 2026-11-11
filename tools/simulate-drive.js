@@ -210,8 +210,8 @@ function makeFix(tSec, northM, speedMs, altitude, accuracy = 5) {
   const e = new TripEngine(POLO_TRACK_2026, T0);
   e.speedLimitKmh = 90;
 
-  // 100 s a 100 km/h, con UN pico falso de 160 km/h en medio: el pico no debe
-  // contaminar la máxima sostenida.
+  // 100 s a 100 km/h, con UN pico falso de 160 km/h en medio (un salto de
+  // 1,7 g, imposible): ni la máxima ni la máxima sostenida deben creérselo.
   const v = 100 / 3.6;
   let dist = 0;
   for (let t = 0; t <= 100; t++) {
@@ -221,7 +221,7 @@ function makeFix(tSec, northM, speedMs, altitude, accuracy = 5) {
     e.ingest(makeFix(t, dist, vel, 2850));
   }
   const s = e.stats(T0 + 100000);
-  check('máxima pico (km/h)', s.maxSpeedKmh, 160, 0.5);
+  check('la máxima descarta el pico (km/h)', s.maxSpeedKmh, 100, 0.5);
   check('máxima sostenida ignora el pico', s.analysis.sustainedMaxKmh, 100, 1.5);
   check('percentil 85 (km/h)', s.analysis.p85Kmh, 100, HIST_BIN_KMH);
   check('tiempo sobre 90 km/h (s)', s.analysis.overLimitMs / 1000, 100, 2);
@@ -284,6 +284,77 @@ function makeFix(tSec, northM, speedMs, altitude, accuracy = 5) {
     gaugeDegFor(150, 200) > gaugeDegFor(50, 200) ? 1 : 0, 1, 0);
   check('se acota por encima del máximo', gaugeDegFor(500, 200), gaugeDegFor(200, 200), 0.01);
   check('se acota por debajo de cero', gaugeDegFor(-30, 200), gaugeDegFor(0, 200), 0.01);
+}
+
+// ------------------------------------------------- 12. fusión con sensores
+{
+  console.log('\n— Barómetro + GPS: recta plana con altitud GPS ruidosa (±9 m) —');
+  const v = 60 / 3.6;
+  // Error típico del GPS en altura: un vaivén lento más un temblor rápido.
+  const ruido = (t) => 6 * Math.sin(t / 14) + 3 * Math.sin(t * 1.7);
+  const soloGps = new TripEngine(POLO_TRACK_2026, T0);
+  const fusion = new TripEngine(POLO_TRACK_2026, T0);
+  for (let t = 0; t <= 300; t++) {
+    const fix = makeFix(t, v * t, v, 2560 + ruido(t));
+    soloGps.ingest(fix);
+    fusion.ingest({ ...fix, pressureHpa: 745.0 });
+  }
+  const a = soloGps.stats(T0 + 300000);
+  const b = fusion.stats(T0 + 300000);
+  console.log(`      (solo GPS inventa ${a.elevGain.toFixed(1)} m de subida; con barómetro ${b.elevGain.toFixed(1)} m)`);
+  check('con barómetro casi no inventa desnivel', b.elevGain + b.elevLoss, 0, 6);
+  check('mucho menos que solo con GPS', b.elevGain + b.elevLoss < (a.elevGain + a.elevLoss) / 3 ? 1 : 0, 1, 0);
+  check('la altitud queda anclada al GPS', b.altitude, 2560, 5);
+  check('pendiente en llano con barómetro', b.grade, 0, 0.5);
+}
+{
+  console.log('\n— Barómetro + GPS: subida real de 100 m en 2 km —');
+  const v = 50 / 3.6;
+  const e = new TripEngine(POLO_TRACK_2026, T0);
+  const hpaAt = (alt) => 1013.25 * Math.pow(1 - alt / 44330.77, 1 / 0.190263);
+  const T = Math.round(2000 / v);
+  for (let t = 0; t <= T; t++) {
+    const alt = 2500 + (100 * (v * t)) / 2000;
+    e.ingest({ ...makeFix(t, v * t, v, alt + 6 * Math.sin(t * 2.1)), pressureHpa: hpaAt(alt) - 12 });
+  }
+  const s = e.stats(T0 + T * 1000);
+  check('desnivel subido', s.elevGain, 100, 6);
+  check('no cuenta bajadas falsas', s.elevLoss, 0, 2);
+  check('pendiente del 5 %', s.grade, 5, 0.6);
+}
+{
+  console.log('\n— Parado con deriva del GPS y el teléfono en calma —');
+  const e = new TripEngine(POLO_TRACK_2026, T0);
+  for (let t = 0; t <= 60; t++) {
+    e.ingest({ ...makeFix(t, Math.sin(t) * 3, 0.9 + 0.3 * Math.sin(t * 3), 2560), still: true });
+  }
+  const s = e.stats(T0 + 60000);
+  check('velocidad mostrada', s.speedKmh, 0, 0);
+  check('máxima', s.maxSpeedKmh, 0, 0);
+  check('distancia', s.distanceM, 0, 0);
+}
+{
+  console.log('\n— Pico falso del GPS a mitad de un crucero a 40 km/h —');
+  const e = new TripEngine(POLO_TRACK_2026, T0);
+  const v = 40 / 3.6;
+  for (let t = 0; t <= 40; t++) e.ingest(makeFix(t, v * t, t === 20 ? 55 : v, 2560));
+  const s = e.stats(T0 + 40000);
+  check('la máxima ignora el pico', s.maxSpeedKmh, 40, 0.5);
+  check('la distancia no se altera', s.distanceM, v * 40, 3);
+}
+{
+  console.log('\n— Frenada fuerte real (1 g) no se confunde con un pico —');
+  const e = new TripEngine(POLO_TRACK_2026, T0);
+  let v = 100 / 3.6, x = 0;
+  for (let t = 0; t <= 5; t++) { e.ingest(makeFix(t, x, v, 2560)); x += v; }
+  let rechazadas = 0;
+  for (let t = 6; t <= 10; t++) {
+    const nv = Math.max(0, v - 9.8);
+    x += (v + nv) / 2; v = nv;
+    if (!e.ingest(makeFix(t, x, v, 2560))) rechazadas++;
+  }
+  check('lecturas rechazadas', rechazadas, 0, 0);
+  check('termina detenido', e.stats(T0 + 10000).speedKmh, 0, 0);
 }
 
 console.log(failures === 0 ? '\nTodas las comprobaciones pasaron.' : `\n${failures} comprobaciones fallaron.`);

@@ -28,6 +28,7 @@ import { HIST_BIN_KMH, analyzePoints } from '@/services/speedStats';
 import { useSettings } from '@/state/SettingsContext';
 import { colors, font, spacing, fonts } from '@/theme/theme';
 import { useAccent } from '@/theme/accent';
+import { DEFAULT_VEHICLE_ID } from '@/vehicles';
 import { altitudeEffect } from '@/utils/altitude';
 import {
   formatAccel,
@@ -51,6 +52,10 @@ export default function TripDetailScreen() {
   const [loading, setLoading] = useState(true);
 
   const unit = settings.unit;
+  // El análisis usa la ficha del carro con el que se hizo el viaje, no la del
+  // que esté activo ahora. Los viajes sin vehículo son anteriores al Gol: del Polo.
+  const tripVehicle =
+    settings.vehicles[trip?.vehicleId ?? DEFAULT_VEHICLE_ID] ?? settings.vehicles[DEFAULT_VEHICLE_ID];
   const unitLabel = speedUnitLabel(unit);
 
   useEffect(() => {
@@ -84,8 +89,8 @@ export default function TripDetailScreen() {
   const effect = useMemo(() => {
     const alt = analysis?.medianAltitude ?? trip?.maxAlt ?? null;
     if (alt == null) return null;
-    return altitudeEffect(settings.vehicle, Math.round(alt / 50) * 50);
-  }, [analysis, trip, settings.vehicle]);
+    return altitudeEffect(tripVehicle, Math.round(alt / 50) * 50);
+  }, [analysis, trip, tripVehicle]);
 
   const confirmDelete = () => {
     if (!trip) return;
@@ -391,7 +396,7 @@ export default function TripDetailScreen() {
               {effect && (
                 <Text style={styles.footnote}>
                   A los {Math.round(effect.altitudeM)} m de este viaje el motor dispuso de unos{' '}
-                  {Math.round(effect.powerCv)} CV de sus {settings.vehicle.powerCv}, así que el
+                  {Math.round(effect.powerCv)} CV de sus {tripVehicle.powerCv}, así que el
                   0-100 esperable rondaba los{' '}
                   {effect.target0100Min.toFixed(1).replace('.', ',')}–
                   {effect.target0100Max.toFixed(1).replace('.', ',')} s.

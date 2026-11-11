@@ -171,6 +171,37 @@ export default function SpeedScreen() {
           ? { label: 'GPS medio', tint: colors.amber }
           : { label: 'GPS débil', tint: colors.danger };
 
+  // ---- Calidad de la medición: qué tan fiable es lo que se muestra ahora ----
+  const compassAcc = sensors.compass.accuracyDeg;
+  const calItems = [
+    accuracy == null
+      ? { ok: false, text: 'GPS sin señal todavía: sal a cielo abierto y espera unos segundos.' }
+      : accuracy <= 8
+        ? { ok: true, text: `GPS con ±${Math.round(accuracy)} m: velocidad y distancia fiables.` }
+        : {
+            ok: false,
+            text: `GPS con ±${Math.round(accuracy)} m: pon el iPhone más cerca del parabrisas, con vista al cielo.`,
+          },
+    sensors.baro.status === 'activo'
+      ? { ok: true, text: 'Barómetro activo: pendiente y desnivel medidos con la presión real.' }
+      : { ok: false, text: 'Sin barómetro: la pendiente y el desnivel salen solo del GPS (más ruidosos).' },
+    motionOk
+      ? { ok: true, text: 'Giroscopio y acelerómetro activos. Mejor con el iPhone fijo en un soporte firme.' }
+      : { ok: false, text: 'Sin sensores de movimiento: no hay fuerza g en curva.' },
+    compassAcc != null && compassAcc > 0 && compassAcc <= 20
+      ? { ok: true, text: `Brújula calibrada (±${Math.round(compassAcc)}°).` }
+      : {
+          ok: false,
+          text: 'Brújula imprecisa: aleja el iPhone de imanes del soporte y muévelo dibujando un 8.',
+        },
+  ];
+  const calOk = calItems.filter((i) => i.ok).length;
+  const calibration = {
+    items: calItems,
+    label: calOk === calItems.length ? 'ÓPTIMA' : calOk >= 2 ? 'BUENA' : 'REVISAR',
+    tint: calOk === calItems.length ? colors.lime : calOk >= 2 ? colors.amber : colors.danger,
+  };
+
   const grade = live.grade;
   const limitShown = settings.speedAlertEnabled
     ? Math.round(toDisplaySpeed(settings.speedLimit, unit))
@@ -374,7 +405,7 @@ export default function SpeedScreen() {
         </Text>
       </View>
 
-      <CarShowcase height={landscape ? 150 : 190} />
+      <CarShowcase height={landscape ? 150 : 190} bodyType={vehicle.bodyType} />
       <Text style={styles.carName}>
         {vehicle.model} {vehicle.year}
       </Text>
@@ -502,7 +533,7 @@ export default function SpeedScreen() {
               <View style={[styles.powerBarFill, { width: `${Math.max(6, (1 / effect.factor) * 100)}%` }]} />
             </View>
             <Text style={styles.powerNote}>
-              Tu 1.6 es atmosférico: entrega lo que le deja el aire que respira. Con{' '}
+              Tu {vehicle.displacementL.toFixed(1)} es atmosférico: entrega lo que le deja el aire que respira. Con{' '}
               {(effect.pressureKpa * 10).toFixed(0)} hPa
               {effect.pressureSource === 'barometro' ? ' medidos por el barómetro del iPhone' : ''}{' '}
               y {settings.airTempC} °C (el iPhone no tiene termómetro exterior; se ajusta en Garaje), la
@@ -586,7 +617,7 @@ export default function SpeedScreen() {
           name="GPS L1 + L5"
           detail={
             accuracy != null
-              ? `±${Math.round(accuracy)} m · velocidad Doppler, altitud, rumbo`
+              ? `±${Math.round(accuracy)} m · velocidad Doppler, posición, rumbo en marcha`
               : 'esperando señal (mejor con cielo despejado)'
           }
           status={gpsActive && accuracy != null ? 'activo' : 'buscando'}
@@ -596,7 +627,7 @@ export default function SpeedScreen() {
           name="Giroscopio y acelerómetro"
           detail={
             motionOk
-              ? `giro ${sensors.motion.yawRateDps.toFixed(1)} °/s · curvas en g reales`
+              ? `giro ${sensors.motion.yawRateDps.toFixed(1)} °/s · curvas en g y detectar que estás parado`
               : 'sin datos de movimiento'
           }
           status={sensors.motion.status}
@@ -606,7 +637,7 @@ export default function SpeedScreen() {
           name="Barómetro"
           detail={
             pressureHpa != null
-              ? `${pressureHpa.toFixed(1)} hPa · corrige la potencia con el aire real`
+              ? `${pressureHpa.toFixed(1)} hPa · pendiente y desnivel finos, potencia con el aire real`
               : 'sin lectura de presión'
           }
           status={sensors.baro.status}
@@ -616,18 +647,49 @@ export default function SpeedScreen() {
           name="Brújula"
           detail={
             sensors.compass.headingDeg != null
-              ? `${Math.round(sensors.compass.headingDeg)}° · da el rumbo con el carro parado`
+              ? `${Math.round(sensors.compass.headingDeg)}°${
+                  sensors.compass.accuracyDeg != null && sensors.compass.accuracyDeg > 0
+                    ? ` ±${Math.round(sensors.compass.accuracyDeg)}°`
+                    : ''
+                } · da el rumbo con el carro parado`
               : 'sin rumbo magnético'
           }
           status={sensors.compass.status}
         />
       </GlassCard>
       <Text style={styles.footnote}>
-        La velocidad sale del GPS (efecto Doppler, no de restar posiciones) y la curva, del
-        giroscopio multiplicado por esa velocidad: funciona con el iPhone en cualquier posición del
+        La velocidad sale del GPS de doble frecuencia (efecto Doppler, no de restar posiciones): es
+        la medida más exacta que puede dar el teléfono, con un error de unas décimas de km/h a cielo
+        abierto. Los otros sensores la afinan: el acelerómetro y el giroscopio confirman cuándo el
+        carro está detenido de verdad (el GPS solo «camina» un poco), se descartan los picos
+        imposibles y el barómetro da la pendiente y el desnivel. La curva sale del giroscopio
+        multiplicado por la velocidad, así que funciona con el iPhone en cualquier posición del
         soporte. Sin conexión al carro (OBD-II) no se leen rpm, marcha ni consumo, así que la app no
         los muestra.
       </Text>
+
+      <SectionTitle
+        right={<Badge label={calibration.label} tint={calibration.tint} />}
+      >
+        Calidad de la medición
+      </SectionTitle>
+      <GlassCard>
+        {calibration.items.map((item) => (
+          <View key={item.text} style={styles.calRow}>
+            <Ionicons
+              name={item.ok ? 'checkmark-circle' : 'alert-circle'}
+              size={16}
+              color={item.ok ? colors.lime : colors.amber}
+            />
+            <Text style={styles.calText}>{item.text}</Text>
+          </View>
+        ))}
+        <Text style={styles.calNote}>
+          El velocímetro del carro marca de más a propósito (lo exige la norma: nunca de menos, y
+          suele ser un 2-5 % arriba). Por eso aquí verás 2 a 5 km/h menos que en el tablero a
+          100 km/h: la cifra del GPS es la real.
+        </Text>
+      </GlassCard>
 
       <Pressable onPress={() => router.push('/garage')} style={styles.vehicleChip}>
         <Ionicons name="car-sport" size={16} color={colors.text} />
@@ -809,6 +871,9 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: spacing.lg,
   },
+  calRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.sm },
+  calText: { flex: 1, fontSize: 13, color: colors.text, lineHeight: 18 },
+  calNote: { fontSize: 11, color: colors.textFaint, lineHeight: 16, marginTop: spacing.xs },
   swapButton: {
     width: 30,
     height: 30,

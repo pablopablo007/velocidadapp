@@ -19,6 +19,7 @@ import {
   toRawFix,
 } from '@/services/backgroundLocation';
 import { saveTrip } from '@/services/database';
+import { freshPressureHpa, isPhoneStill } from '@/services/sensorHub';
 import { EMPTY_STATS, LiveStats, RawFix, TrackPoint, TripEngine } from '@/services/tripEngine';
 import { useSettings } from '@/state/SettingsContext';
 import { LatLng, simplify } from '@/utils/geo';
@@ -102,6 +103,19 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     if (tripRef.current) tripRef.current.speedLimitKmh = limit;
   }, [settings]);
 
+  // Al cambiar de carro la sesión empieza de cero: las marcas de aceleración
+  // y la máxima de la sesión eran del otro vehículo.
+  const sessionVehicleRef = useRef(settings.activeVehicleId);
+  useEffect(() => {
+    if (sessionVehicleRef.current === settings.activeVehicleId) return;
+    sessionVehicleRef.current = settings.activeVehicleId;
+    const fresh = new TripEngine(settings.vehicle);
+    fresh.speedLimitKmh = settings.speedAlertEnabled ? settings.speedLimit : 0;
+    ambientRef.current = fresh;
+    setLive(EMPTY_STATS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.activeVehicleId]);
+
   const setStatusBoth = useCallback((next: TrackingStatus) => {
     statusRef.current = next;
     setStatus(next);
@@ -140,7 +154,15 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
   // ------------------------------------------------------------ ingesta GPS
 
-  const handleFix = useCallback((fix: RawFix) => {
+  const handleFix = useCallback((gpsFix: RawFix) => {
+    // A la lectura del GPS se le adjunta lo que dicen los otros sensores en
+    // ese mismo momento (si la lectura es reciente; las que llegan con retraso
+    // desde el segundo plano van solo con GPS).
+    const wall = Date.now();
+    const current = Math.abs(wall - gpsFix.timestamp) < 3000;
+    const fix: RawFix = current
+      ? { ...gpsFix, pressureHpa: freshPressureHpa(wall), still: isPhoneStill(wall) }
+      : gpsFix;
     const accepted = ambientRef.current.ingest(fix);
     if (!accepted) return;
 

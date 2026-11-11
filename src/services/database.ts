@@ -33,6 +33,19 @@ export type TripSummary = {
 
 export type Trip = TripSummary & { points: TrackPoint[] };
 
+/**
+ * Los viajes de antes de haber varios carros no tienen vehículo: son todos del
+ * Polo, el único que existía.
+ */
+const LEGACY_VEHICLE_ID = 'polo-track-2026-16';
+
+/** Condición SQL "este viaje es del vehículo X" y sus parámetros. */
+function vehicleWhere(vehicleId: string): { sql: string; args: string[] } {
+  return vehicleId === LEGACY_VEHICLE_ID
+    ? { sql: '(vehicle_id = ? OR vehicle_id IS NULL)', args: [vehicleId] }
+    : { sql: 'vehicle_id = ?', args: [vehicleId] };
+}
+
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 async function getDb(): Promise<SQLite.SQLiteDatabase> {
@@ -217,14 +230,15 @@ export async function saveTrip(trip: Trip): Promise<void> {
 }
 
 /** Lista de viajes sin la traza: la columna `points` pesa demasiado para una lista. */
-export async function listTrips(limit = 200): Promise<TripSummary[]> {
+export async function listTrips(vehicleId: string, limit = 200): Promise<TripSummary[]> {
   const db = await getDb();
+  const w = vehicleWhere(vehicleId);
   const rows = await db.getAllAsync<Row>(
     `SELECT id, started_at, ended_at, distance_m, duration_ms, moving_ms,
             max_speed, avg_speed, avg_moving, elev_gain, elev_loss, max_alt, min_alt,
             start_label, end_label, fuel_l, cost, perf, note, analysis, vehicle_id
-     FROM trips ORDER BY started_at DESC LIMIT ?`,
-    [limit]
+     FROM trips WHERE ${w.sql} ORDER BY started_at DESC LIMIT ?`,
+    [...w.args, limit]
   );
   return rows.map(rowToSummary);
 }
@@ -247,9 +261,11 @@ export async function deleteTrip(id: string): Promise<void> {
   await db.runAsync('DELETE FROM trips WHERE id = ?', [id]);
 }
 
-export async function deleteAllTrips(): Promise<void> {
+/** Borra el historial de un vehículo; el del otro carro no se toca. */
+export async function deleteAllTrips(vehicleId: string): Promise<void> {
   const db = await getDb();
-  await db.runAsync('DELETE FROM trips');
+  const w = vehicleWhere(vehicleId);
+  await db.runAsync(`DELETE FROM trips WHERE ${w.sql}`, w.args);
 }
 
 export async function updateTripNote(id: string, note: string): Promise<void> {
@@ -278,9 +294,10 @@ export type Totals = {
   overLimitMs: number;
 };
 
-/** Agregados de todo el historial, calculados en SQL para no cargar los viajes. */
-export async function getTotals(): Promise<Totals> {
+/** Agregados del historial de un vehículo, calculados en SQL para no cargar los viajes. */
+export async function getTotals(vehicleId: string): Promise<Totals> {
   const db = await getDb();
+  const w = vehicleWhere(vehicleId);
   const row = await db.getFirstAsync<{
     trips: number;
     distance_m: number | null;
@@ -296,12 +313,14 @@ export async function getTotals(): Promise<Totals> {
             SUM(moving_ms) AS moving_ms, MAX(max_speed) AS max_speed,
             SUM(elev_gain) AS elev_gain, SUM(elev_loss) AS elev_loss,
             SUM(fuel_l) AS fuel_l, SUM(cost) AS cost
-     FROM trips`
+     FROM trips WHERE ${w.sql}`,
+    w.args
   );
 
   // Los récords viven dentro de los JSON de `perf` y `analysis`; se resuelven en JS.
   const detailRows = await db.getAllAsync<{ perf: string | null; analysis: string | null }>(
-    'SELECT perf, analysis FROM trips'
+    `SELECT perf, analysis FROM trips WHERE ${w.sql}`,
+    w.args
   );
   let best0_60: number | null = null;
   let best0_100: number | null = null;
@@ -362,12 +381,13 @@ export async function getTotals(): Promise<Totals> {
 }
 
 /** Distancia por día de los últimos `days` días, para el gráfico de barras. */
-export async function getDailyDistance(days = 14): Promise<{ day: string; km: number }[]> {
+export async function getDailyDistance(vehicleId: string, days = 14): Promise<{ day: string; km: number }[]> {
   const db = await getDb();
+  const w = vehicleWhere(vehicleId);
   const since = Date.now() - days * 86400000;
   const rows = await db.getAllAsync<{ started_at: number; distance_m: number }>(
-    'SELECT started_at, distance_m FROM trips WHERE started_at >= ?',
-    [since]
+    `SELECT started_at, distance_m FROM trips WHERE started_at >= ? AND ${w.sql}`,
+    [since, ...w.args]
   );
   const buckets = new Map<string, number>();
   for (let i = days - 1; i >= 0; i--) {

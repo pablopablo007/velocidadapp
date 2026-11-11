@@ -43,6 +43,8 @@ export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { settings } = useSettings();
+  // Cada carro tiene su historial: al cambiar de vehículo se recarga el suyo.
+  const vehicleId = settings.activeVehicleId;
 
   const [trips, setTrips] = useState<TripSummary[]>([]);
   const [totals, setTotals] = useState<Totals | null>(null);
@@ -55,12 +57,16 @@ export default function HistoryScreen() {
   const distLabel = distanceUnitLabel(unit);
 
   const load = useCallback(async () => {
-    const [t, agg, bars] = await Promise.all([listTrips(), getTotals(), getDailyDistance(14)]);
+    const [t, agg, bars] = await Promise.all([
+      listTrips(vehicleId),
+      getTotals(vehicleId),
+      getDailyDistance(vehicleId, 14),
+    ]);
     setTrips(t);
     setTotals(agg);
     setDaily(bars);
     setLoaded(true);
-  }, []);
+  }, [vehicleId]);
 
   // Recarga al volver a la pestaña: puede haber un viaje nuevo recién guardado.
   useFocusEffect(
@@ -95,6 +101,9 @@ export default function HistoryScreen() {
   const header = (
     <View>
       <Text style={styles.screenTitle}>Historial</Text>
+      <Text style={[styles.screenSub, { color: accent.accent }]}>
+        {settings.vehicle.model.toUpperCase()} {settings.vehicle.year}
+      </Text>
 
       {totals && totals.trips > 0 && (
         <>
@@ -228,7 +237,7 @@ export default function HistoryScreen() {
           <EmptyState
             icon="map-outline"
             title="Todavía no hay viajes"
-            message="Pulsa «Iniciar viaje» en la pestaña Velocidad y el recorrido aparecerá aquí al terminar."
+            message={`Aquí salen solo los viajes del ${settings.vehicle.model}. Se graban solos al conducir con este carro elegido.`}
           />
         ) : undefined
       }
@@ -330,6 +339,7 @@ function TripStat({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  screenSub: { fontFamily: fonts.semibold, fontSize: 12, letterSpacing: 2.5, marginTop: 2 },
   screenTitle: { ...font.title, fontSize: 30, color: colors.text },
 
   costCard: {

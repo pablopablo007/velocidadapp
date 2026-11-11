@@ -46,8 +46,10 @@ function SpeedometerBase({
   overLimit = false,
   caption = 'velocidad',
 }: Props) {
-  const target = Math.max(0, Math.min(value, max));
-  const smooth = useSmoothValue(target, 240, 0.05);
+  // La cifra muestra la velocidad real aunque supere la escala; solo el arco
+  // se detiene en el tope del dial.
+  const shown = useSmoothValue(Math.max(0, value), 240, 0.05);
+  const smooth = Math.min(shown, max);
 
   const cx = size / 2;
   const cy = size / 2;
@@ -202,7 +204,7 @@ function SpeedometerBase({
           minimumFontScale={0.6}
           allowFontScaling={false}
         >
-          {Math.round(smooth)}
+          {Math.round(shown)}
         </Text>
         <Text style={[styles.unit, { fontSize: size * 0.045 }]}>{unitLabel}</Text>
       </View>

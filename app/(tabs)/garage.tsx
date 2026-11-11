@@ -67,13 +67,13 @@ export default function GarageScreen() {
   const home = useMemo(() => altitudeEffect(v, HOME_CITY.altitudeM, HOME_CITY.tempC), [v]);
 
   const confirmClearHistory = () => {
-    Alert.alert('Borrar historial', 'Se eliminarán todos los viajes guardados. No se puede deshacer.', [
+    Alert.alert('Borrar historial', `Se eliminarán todos los viajes guardados del ${v.model}. Los del otro carro no se tocan. No se puede deshacer.`, [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Borrar todo',
         style: 'destructive',
         onPress: () => {
-          deleteAllTrips().catch(() => {});
+          deleteAllTrips(settings.activeVehicleId).catch(() => {});
         },
       },
     ]);

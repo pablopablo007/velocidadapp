@@ -2,6 +2,7 @@ import * as Location from 'expo-location';
 import { Barometer, DeviceMotion } from 'expo-sensors';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import { reportMotion, reportPressure } from '@/services/sensorHub';
 import { useTracking } from '@/state/TrackingContext';
 
 /**
@@ -100,6 +101,9 @@ export function SensorsProvider({ children }: { children: React.ReactNode }) {
         yawSmooth.current = yawSmooth.current * 0.8 + yaw * 0.2;
 
         // Por debajo de ~5 km/h el giro no es una curva: es mover el teléfono.
+        // Para el motor de cálculo: ¿el teléfono está en calma absoluta?
+        reportMotion(Math.hypot(acc.x, acc.y, acc.z) / G, Math.hypot(rr.alpha, rr.beta, rr.gamma));
+
         const v = speedMs.current;
         const lateralG = v > 1.4 ? (v * yawSmooth.current * (Math.PI / 180)) / G : 0;
 
@@ -134,6 +138,7 @@ export function SensorsProvider({ children }: { children: React.ReactNode }) {
       Barometer.setUpdateInterval(1000);
       sub = Barometer.addListener(({ pressure }) => {
         if (!Number.isFinite(pressure) || pressure < 300) return;
+        reportPressure(pressure);
         latest.current = { ...latest.current, baro: { status: 'activo', pressureHpa: pressure } };
       });
     })();

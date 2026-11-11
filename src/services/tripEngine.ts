@@ -1,5 +1,5 @@
 import {
-  AltitudeFilter,
+  BaroAltitudeFusion,
   ElevationAccumulator,
   GradeTracker,
   bearing,
@@ -28,6 +28,10 @@ export type RawFix = {
   speed: number | null; // m/s, -1 o null si no disponible
   heading: number | null;
   timestamp: number;
+  /** Presión del barómetro en el momento de la lectura, si la hay. */
+  pressureHpa?: number | null;
+  /** El acelerómetro y el giroscopio dicen que el teléfono está en calma total. */
+  still?: boolean;
 };
 
 export type PerfResults = {
@@ -100,6 +104,13 @@ class RollDetector {
 const STOPPED_MS = 0.5;
 /** Descarta lecturas con error horizontal mayor a esto (m). */
 const MAX_ACCURACY_M = 30;
+/**
+ * Cambio de velocidad imposible para un carro de calle (m/s², ~1,4 g). Una
+ * lectura que lo supera es un pico del GPS, no una frenada ni una acelerada.
+ */
+const MAX_PLAUSIBLE_ACCEL = 14;
+/** Con el teléfono en calma total, por debajo de esto (m/s ≈ 5 km/h) es deriva del GPS. */
+const STILL_CLAMP_MS = 1.5;
 
 /**
  * Detector automático de tiempos de aceleración y frenada.
@@ -362,7 +373,7 @@ export class TripEngine {
   private speedTimeIntegral = 0; // Σ v·dt, para la media real ponderada por tiempo
   private fuel = 0;
 
-  private altFilter = new AltitudeFilter();
+  private altFilter = new BaroAltitudeFusion();
   private elev = new ElevationAccumulator(2.5);
   private grade = new GradeTracker(120);
   private perfTimer = new PerformanceTimer();
@@ -371,6 +382,8 @@ export class TripEngine {
   private last: TrackPoint | null = null;
   private lastRaw: RawFix | null = null;
   private lastGForce = 0;
+  /** La lectura anterior se descartó por pico: la siguiente se acepta sin esa prueba. */
+  private spikeRejected = false;
   private currentSpeed = 0;
   private currentHeading: number | null = null;
   private currentAccuracy: number | null = null;
@@ -415,7 +428,23 @@ export class TripEngine {
       // Salto imposible (> 80 m/s ≈ 288 km/h): descarta el punto.
       if (raw / dtS > 80) return false;
 
-      if (!Number.isFinite(speed)) speed = raw / dtS;
+      // Sin velocidad Doppler se deriva de la posición, pero solo si el
+      // desplazamiento supera el error del GPS: si no, es ruido, no movimiento.
+      if (!Number.isFinite(speed)) speed = raw >= Math.max(2.5, acc * 0.5) ? raw / dtS : 0;
+
+      // El acelerómetro y el giroscopio no sienten nada: el carro está quieto,
+      // y lo poco que marque el GPS es su propia deriva.
+      if (fix.still && speed < STILL_CLAMP_MS) speed = 0;
+      if (speed < STOPPED_MS) speed = 0;
+
+      // Pico del GPS: ningún carro de calle cambia de velocidad a más de
+      // ~1,4 g. Se descarta la lectura; si la siguiente insiste, se acepta
+      // (pudo ser real tras un hueco de señal).
+      if (dtS <= 3 && !this.spikeRejected && Math.abs(speed - this.currentSpeed) / dtS > MAX_PLAUSIBLE_ACCEL) {
+        this.spikeRejected = true;
+        return false;
+      }
+      this.spikeRejected = false;
 
       // Parado: el GPS "camina" solo. No sumamos esa deriva a la distancia.
       const drifting = speed < STOPPED_MS || raw < Math.max(2.5, acc * 0.5);
@@ -426,14 +455,18 @@ export class TripEngine {
 
       this.speedTimeIntegral += speed * dtS;
 
+      // Aceleración longitudinal: media con la lectura anterior, porque la
+      // derivada de una señal de 1 Hz amplifica el ruido.
       const dv = speed - this.currentSpeed;
-      this.lastGForce = dtS > 0 ? dv / dtS / 9.80665 : 0;
+      const g = dtS > 0 && dtS <= 3 ? dv / dtS / 9.80665 : 0;
+      this.lastGForce = (this.lastGForce + g) / 2;
 
       const segKmh = (stepDist / dtS) * MS_TO_KMH;
       const penalty = Math.min(0.45, Math.abs(this.lastGForce) * 1.4);
       this.fuel += fuelForSegment(this.vehicle, stepDist, dtS, segKmh, penalty);
-    } else if (!Number.isFinite(speed)) {
-      speed = 0;
+    } else {
+      if (!Number.isFinite(speed)) speed = 0;
+      if ((fix.still && speed < STILL_CLAMP_MS) || speed < STOPPED_MS) speed = 0;
     }
 
     this.distance += stepDist;
@@ -451,7 +484,7 @@ export class TripEngine {
       );
     }
 
-    const alt = this.altFilter.push(fix.altitude, fix.altitudeAccuracy);
+    const alt = this.altFilter.push(fix.altitude, fix.altitudeAccuracy, fix.pressureHpa);
     this.elev.push(alt);
     this.grade.push(stepDist, alt);
 

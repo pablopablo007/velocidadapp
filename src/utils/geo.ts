@@ -78,6 +78,68 @@ export class AltitudeFilter {
   }
 }
 
+/** Altitud de una presión según la atmósfera estándar, en metros. */
+function pressureAltitude(hpa: number): number {
+  return 44330.77 * (1 - Math.pow(hpa / 1013.25, 0.190263));
+}
+
+/**
+ * Altitud combinando GPS y barómetro.
+ *
+ * Cada uno falla donde el otro acierta: el GPS da la altitud absoluta pero
+ * salta varios metros de una lectura a otra; el barómetro nota cambios de
+ * decímetros, pero su valor absoluto depende del clima del día. Aquí el
+ * barómetro pone la forma (subidas y bajadas) y el GPS lo ancla despacio a la
+ * altitud real: `altitud = altitud_barométrica + corrección`, donde la
+ * corrección sigue al GPS con una constante de tiempo de ~1,5 minutos.
+ *
+ * Sin barómetro se comporta como el filtro de altitud GPS de siempre.
+ */
+export class BaroAltitudeFusion {
+  private gps = new AltitudeFilter();
+  private offset: number | null = null;
+  private samples = 0;
+  private value: number | null = null;
+
+  push(
+    gpsAlt: number | null | undefined,
+    gpsAccuracy: number | null | undefined,
+    pressureHpa: number | null | undefined
+  ): number | null {
+    const filtered = this.gps.push(gpsAlt, gpsAccuracy);
+    if (pressureHpa == null || !Number.isFinite(pressureHpa) || pressureHpa < 300) {
+      // Sin presión: se vuelve al GPS filtrado y la corrección se recalcula
+      // cuando el barómetro regrese.
+      this.offset = null;
+      this.samples = 0;
+      this.value = filtered;
+      return this.value;
+    }
+
+    const baro = pressureAltitude(pressureHpa);
+    if (gpsAlt != null && Number.isFinite(gpsAlt)) {
+      const target = gpsAlt - baro;
+      this.samples++;
+      if (this.offset == null) {
+        this.offset = target;
+      } else {
+        const acc = gpsAccuracy != null && gpsAccuracy > 0 ? gpsAccuracy : 10;
+        // Las primeras lecturas se promedian (converge rápido); después la
+        // corrección se mueve muy despacio para no heredar el ruido del GPS.
+        const slow = Math.min(0.02, Math.max(0.004, 0.1 / (acc + 6)));
+        const alpha = Math.max(slow, 1 / this.samples);
+        this.offset += (target - this.offset) * alpha;
+      }
+    }
+    this.value = this.offset != null ? baro + this.offset : filtered;
+    return this.value;
+  }
+
+  get current(): number | null {
+    return this.value;
+  }
+}
+
 /**
  * Acumulador de desnivel con histéresis.
  *

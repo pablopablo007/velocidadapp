@@ -55,8 +55,8 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <SettingsProvider>
           <AccentProvider>
-          <VehicleSwitchProvider>
           <TrackingProvider>
+          <VehicleSwitchProvider>
             <SensorsProvider>
             <CarPlaySync />
             <StatusBar style="light" />
@@ -77,8 +77,8 @@ export default function RootLayout() {
               />
             </Stack>
             </SensorsProvider>
-          </TrackingProvider>
           </VehicleSwitchProvider>
+          </TrackingProvider>
           </AccentProvider>
         </SettingsProvider>
       </SafeAreaProvider>
