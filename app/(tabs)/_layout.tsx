@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { Tabs } from 'expo-router';
+// Tabs y useBottomTabBarHeight tienen que salir del mismo módulo: si no, la
+// cabina no encuentra el contexto con la altura de la barra.
+import { Tabs } from 'expo-router/js-tabs';
 import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
