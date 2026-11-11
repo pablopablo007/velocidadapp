@@ -1,0 +1,74 @@
+# Build personalizada de EAS: compila la app en un Mac de Expo y entrega un .ipa
+# SIN FIRMAR, para firmarlo después con tu cuenta (Sideloadly, AltStore, Xcode o
+# codesign). Va junto al archivo Velocidad.entitlements con el permiso de CarPlay.
+#
+#   npx eas-cli build -p ios --profile ipa-sin-firmar
+build:
+  name: iOS .ipa sin firmar
+  steps:
+    - eas/checkout
+
+    - eas/install_node_modules
+
+    - run:
+        name: Comprobaciones (tipos, lint, motor de cálculo)
+        command: |
+          npm run typecheck
+          npm run lint
+          npm run test:engine
+
+    - eas/prebuild:
+        inputs:
+          clean: true
+
+    - run:
+        name: Instalar pods
+        working_directory: ./ios
+        command: pod install
+
+    - run:
+        name: Compilar en Release sin firmar
+        command: |
+          mkdir -p build
+          xcodebuild \
+            -workspace ios/Velocidad.xcworkspace \
+            -scheme Velocidad \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Velocidad.xcarchive \
+            -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            archive > build/xcodebuild.log 2>&1 || {
+              echo "---- errores ----"
+              grep -E "error:|fatal error" build/xcodebuild.log | sort -u | head -60
+              echo "---- final del registro ----"
+              tail -80 build/xcodebuild.log
+              exit 1
+            }
+          grep -E "\*\* ARCHIVE" build/xcodebuild.log || true
+          test -d build/Velocidad.xcarchive/Products/Applications/Velocidad.app
+
+    - run:
+        name: Empaquetar el .ipa
+        command: |
+          set -e
+          rm -rf build/salida && mkdir -p build/salida/Payload
+          cp -R build/Velocidad.xcarchive/Products/Applications/Velocidad.app build/salida/Payload/
+          (cd build/salida && zip -qry Velocidad-sin-firmar.ipa Payload && rm -rf Payload)
+          cp ios/Velocidad/Velocidad.entitlements build/salida/
+          /usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest" build/Velocidad.xcarchive/Products/Applications/Velocidad.app/Info.plist
+          ls -la build/salida
+
+    - eas/upload_artifact:
+        name: Subir el .ipa
+        inputs:
+          path: build/salida/Velocidad-sin-firmar.ipa
+
+    - eas/upload_artifact:
+        name: Subir los permisos (entitlements)
+        inputs:
+          type: build-artifact
+          path: build/salida/Velocidad.entitlements
