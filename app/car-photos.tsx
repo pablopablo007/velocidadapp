@@ -36,6 +36,9 @@ export default function CarPhotosScreen() {
   }, []);
 
   useEffect(() => {
+    // refresh es asíncrona: el setState ocurre al terminar de leer el disco,
+    // no de forma síncrona como cree la regla.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh().catch(() => {});
   }, [refresh]);
 

@@ -253,7 +253,7 @@ export default function HistoryScreen() {
             title="Todavía no hay viajes"
             message="Pulsa «Iniciar viaje» en la pestaña Velocidad y el recorrido aparecerá aquí al terminar."
           />
-        ) : null
+        ) : undefined
       }
       renderItem={({ item }) => (
         <TripCard

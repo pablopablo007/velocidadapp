@@ -9,6 +9,7 @@ import {
   NativeSyntheticEvent,
   Pressable,
   ScrollView,
+  ScrollViewInstance,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -100,7 +101,7 @@ export default function SpeedScreen() {
   const circumference = useMemo(() => rollingCircumferenceM(vehicle), [vehicle]);
 
   // ---- Paginado horizontal ----
-  const pager = useRef<ScrollView>(null);
+  const pager = useRef<ScrollViewInstance>(null);
   const [page, setPage] = useState(0);
   const goTo = (p: number) => {
     pager.current?.scrollTo({ x: p * width, animated: true });
@@ -647,7 +648,7 @@ const styles = StyleSheet.create({
 
   alertGlow: { position: 'absolute', top: 0, left: 0, right: 0, height: 200 },
   alertFrame: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderWidth: 4,
     borderColor: colors.danger,
     borderRadius: 48, // sigue las esquinas redondeadas de la pantalla del iPhone

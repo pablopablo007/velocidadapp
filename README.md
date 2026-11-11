@@ -3,13 +3,17 @@
 Medidor de velocidad en tiempo real con mapa, historial y cronómetro, hecho a la medida
 de un **Volkswagen Polo Track 2026 1.6 MSI** y de un **iPhone 15 Pro**.
 
-React Native + Expo SDK 54. Uso personal.
+React Native + Expo SDK 58. Uso personal.
 
-> **El SDK está anclado a la versión 54 a propósito.** Expo Go en la App Store lleva meses
-> sin poder actualizarse porque Apple no aprueba las versiones nuevas, así que SDK 54 es
-> lo más reciente que corre en un iPhone real sin pagar la cuenta de Apple Developer.
-> Si subes el proyecto a SDK 55, 56 o 57 el iPhone responderá *"Project is incompatible
-> with this version of Expo Go"*. Ver [Expo Go y la App Store](https://expo.dev/changelog/expo-go-and-app-store-may-2026).
+> **El SDK tiene que coincidir con el de Expo Go.** Expo Go de la App Store solo
+> abre proyectos de su misma versión de SDK (hoy, la 58), y en iOS no se puede
+> instalar una versión anterior. Si el iPhone dice *"Project is incompatible with
+> this version of Expo Go"*, sube el proyecto al SDK que indique el mensaje:
+>
+> ```bash
+> npx expo install expo@~<versión>.0.0
+> npx expo install --fix
+> ```
 
 ---
 

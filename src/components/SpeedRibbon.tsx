@@ -23,7 +23,9 @@ type Props = {
 function SpeedRibbonBase({ speedKmh, maxKmh, seconds = 60, limitKmh, height = 48 }: Props) {
   const [samples, setSamples] = useState<number[]>(() => new Array(seconds).fill(0));
   const latest = useRef(speedKmh);
-  latest.current = speedKmh;
+  useEffect(() => {
+    latest.current = speedKmh;
+  }, [speedKmh]);
 
   useEffect(() => {
     const id = setInterval(() => {

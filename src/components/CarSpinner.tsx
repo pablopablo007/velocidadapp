@@ -31,8 +31,14 @@ function CarSpinnerBase({ frames, height = 190, autoSpin = true }: Props) {
     if (frames.length > 1) Image.prefetch(frames).catch(() => {});
   }, [frames]);
 
-  useEffect(() => {
+  // Si cambian las fotos se vuelve al primer cuadro. Se ajusta durante el
+  // render (patrón recomendado por React) en vez de en un efecto.
+  const [prevFrames, setPrevFrames] = useState(frames);
+  if (frames !== prevFrames) {
+    setPrevFrames(frames);
     setIndex(0);
+  }
+  useEffect(() => {
     indexRef.current = 0;
   }, [frames]);
 
@@ -46,6 +52,9 @@ function CarSpinnerBase({ frames, height = 190, autoSpin = true }: Props) {
     return () => clearInterval(id);
   }, [autoSpin, spinnable, touched, total]);
 
+  // Los refs solo se leen dentro de los manejadores del gesto, nunca al
+  // renderizar; la regla no distingue el PanResponder de un cálculo de render.
+  /* eslint-disable react-hooks/refs */
   const pan = useMemo(
     () =>
       PanResponder.create({
@@ -72,6 +81,7 @@ function CarSpinnerBase({ frames, height = 190, autoSpin = true }: Props) {
       }),
     [spinnable, total]
   );
+  /* eslint-enable react-hooks/refs */
 
   if (total === 0) {
     return (

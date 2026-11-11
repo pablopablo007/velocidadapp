@@ -6,6 +6,18 @@ import { Platform, StyleSheet } from 'react-native';
 
 import { colors } from '@/theme/theme';
 
+/**
+ * Icono de pestaña. Desde RN 0.88 el color llega como ColorValue (admite null),
+ * pero aquí siempre es el string de tabBarActiveTintColor/InactiveTintColor.
+ */
+const tabIcon =
+  (name: React.ComponentProps<typeof Ionicons>['name']) =>
+  function TabIcon({ color, size }: { color: unknown; size: number }) {
+    return (
+      <Ionicons name={name} size={size} color={typeof color === 'string' ? color : colors.textFaint} />
+    );
+  };
+
 export default function TabsLayout() {
   return (
     <Tabs
@@ -37,37 +49,35 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Velocidad',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="speedometer" size={size} color={color} />
-          ),
+          tabBarIcon: tabIcon('speedometer'),
         }}
       />
       <Tabs.Screen
         name="map"
         options={{
           title: 'Mapa',
-          tabBarIcon: ({ color, size }) => <Ionicons name="map" size={size} color={color} />,
+          tabBarIcon: tabIcon('map'),
         }}
       />
       <Tabs.Screen
         name="chrono"
         options={{
           title: 'Crono',
-          tabBarIcon: ({ color, size }) => <Ionicons name="timer" size={size} color={color} />,
+          tabBarIcon: tabIcon('timer'),
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
           title: 'Historial',
-          tabBarIcon: ({ color, size }) => <Ionicons name="list" size={size} color={color} />,
+          tabBarIcon: tabIcon('list'),
         }}
       />
       <Tabs.Screen
         name="garage"
         options={{
           title: 'Garaje',
-          tabBarIcon: ({ color, size }) => <Ionicons name="car-sport" size={size} color={color} />,
+          tabBarIcon: tabIcon('car-sport'),
         }}
       />
     </Tabs>
