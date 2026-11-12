@@ -31,6 +31,8 @@ export type Settings = {
   airTempC: number;
   mapStyle: MapStyle;
   followHeading: boolean;
+  /** Tablero sin mapa: solo la velocidad (botón "Ocultar mapa"). */
+  mapHidden: boolean;
   /** Fichas de todos los vehículos del garaje, por id (con los cambios del usuario). */
   vehicles: Record<string, Vehicle>;
   /** Vehículo con el que se conduce ahora: decide la ficha, la escala y el color. */
@@ -65,6 +67,7 @@ const DEFAULTS_STORED: Stored = {
   airTempC: 15,
   mapStyle: 'mutedStandard',
   followHeading: true,
+  mapHidden: false,
   vehicles: factoryVehicles(),
   activeVehicleId: DEFAULT_VEHICLE_ID,
 };

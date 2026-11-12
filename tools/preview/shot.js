@@ -3,7 +3,8 @@
 // Uso: DIST=<carpeta exportada> node shot.js <salida.png> <ancho> <alto> [ruta] [espera_ms]
 //   SPEED=<km/h>          velocidad del recorrido simulado (0 = parado)
 //   SWITCH=1              toca "cambiar de vehículo" antes de capturar
-//   CLICK=<selector CSS>  toca ese elemento antes de capturar
+//   CLICK=<selector CSS>  toca ese elemento antes de capturar (CLICK_WAIT ms después);
+//                         CLICK2 / CLICK2_WAIT, un segundo toque después del primero
 //   La ruta "/?wid=1" hace que las lecturas simuladas lleguen de forma continua.
 const { chromium } = require('playwright');
 const http = require('http');
@@ -58,9 +59,11 @@ server.listen(0, async () => {
     await page.locator('[aria-label^="Cambiar de vehículo"]').first().click();
     await page.waitForTimeout(+(process.env.SWITCH_WAIT || 3600));
   }
-  if (process.env.CLICK) {
-    await page.locator(process.env.CLICK).first().click();
-    await page.waitForTimeout(1500);
+  for (const n of ['', '2']) {
+    const sel = process.env['CLICK' + n];
+    if (!sel) continue;
+    await page.locator(sel).first().click({ force: true });
+    await page.waitForTimeout(+(process.env['CLICK' + n + '_WAIT'] || 1500));
   }
   await page.screenshot({ path: out });
   if (errors.length) console.log('ERRORES:\n' + [...new Set(errors)].slice(0, 8).join('\n'));

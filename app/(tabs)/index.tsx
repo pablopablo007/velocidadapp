@@ -16,13 +16,22 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CarPhoto } from '@/components/CarPhoto';
 import { Clock, GpsBars, IconButton, LimitSign, Readout } from '@/components/cockpit';
 import { TripControl } from '@/components/dash';
 import { MapBackdrop } from '@/components/MapBackdrop';
+import { MapReveal, MapToggleButton, useMapToggle } from '@/components/MapReveal';
 import { SpeedRibbon } from '@/components/SpeedRibbon';
 import { Speedometer } from '@/components/Speedometer';
 import { Badge, EmptyState, GlassCard, PrimaryButton, SectionTitle, StatGrid, StatTile } from '@/components/ui';
@@ -69,7 +78,7 @@ export default function SpeedScreen() {
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
 
-  const { settings, update } = useSettings();
+  const { settings, update, ready: settingsReady } = useSettings();
   const sensors = useSensors();
   const { status, permission, gpsActive, live, trip, path, position, overLimit, requestPermission, lastSavedTripId } =
     useTracking();
@@ -111,7 +120,16 @@ export default function SpeedScreen() {
     );
   }, [vehicle, altitudeForPower, settings.airTempC, pressureKpa]);
 
-  const heading = displayHeading(live.speedKmh, live.heading, sensors.compass.headingDeg);
+  // La brújula sin calibrar (nivel 0) no se usa: daría un rumbo cualquiera.
+  const heading = displayHeading(
+    live.speedKmh,
+    live.heading,
+    sensors.compass.accuracyLevel ? sensors.compass.headingDeg : null
+  );
+
+  // ---- Mapa visible u oculto (se recuerda) ----
+  const { progress: mapVis, mounted: mapMounted } = useMapToggle(settings.mapHidden, settingsReady);
+  const toggleMap = () => update({ mapHidden: !settings.mapHidden });
   const motionOk = sensors.motion.status === 'activo';
   const lateralG = motionOk ? sensors.motion.lateralG : 0;
   // Aceleración: acelerómetro calibrado contra el GPS; sin sensores, la del GPS.
@@ -185,7 +203,7 @@ export default function SpeedScreen() {
 
   const accuracy = live.accuracy;
   // ---- Calidad de la medición: qué tan fiable es lo que se muestra ahora ----
-  const compassAcc = sensors.compass.accuracyDeg;
+  const compassLevel = sensors.compass.accuracyLevel;
   const calItems = [
     accuracy == null
       ? { ok: false, text: 'GPS sin señal todavía: sal a cielo abierto y espera unos segundos.' }
@@ -201,8 +219,11 @@ export default function SpeedScreen() {
     motionOk
       ? { ok: true, text: 'Giroscopio y acelerómetro activos. Mejor con el iPhone fijo en un soporte firme.' }
       : { ok: false, text: 'Sin sensores de movimiento: no hay fuerza g en curva.' },
-    compassAcc != null && compassAcc > 0 && compassAcc <= 20
-      ? { ok: true, text: `Brújula calibrada (±${Math.round(compassAcc)}°).` }
+    compassLevel != null && compassLevel >= 2
+      ? {
+          ok: true,
+          text: compassLevel === 3 ? 'Brújula calibrada (error menor a 20°).' : 'Brújula aceptable (error de 20 a 35°).',
+        }
       : {
           ok: false,
           text: 'Brújula imprecisa: aleja el iPhone de imanes del soporte y muévelo dibujando un 8.',
@@ -350,18 +371,37 @@ export default function SpeedScreen() {
     </Text>
   );
 
-  const map = (style: object, fades: object, arrow: { x: number; y: number }) => (
-    <MapBackdrop
-      position={position}
-      heading={course}
-      path={path}
-      tint={accent.accent}
-      fades={fades}
-      arrow={arrow}
-      onPress={() => router.push('/map')}
-      style={style}
+  const map = (style: object, fades: object, arrow: { x: number; y: number }, originY: number) => (
+    <MapReveal progress={mapVis} mounted={mapMounted} originY={originY} tint={accent.accent} style={style}>
+      <MapBackdrop
+        position={position}
+        heading={course}
+        path={path}
+        tint={accent.accent}
+        fades={fades}
+        arrow={arrow}
+        onPress={() => router.push('/map')}
+        style={StyleSheet.absoluteFill}
+      />
+    </MapReveal>
+  );
+  const mapButton = (top: number) => (
+    <MapToggleButton
+      hidden={settings.mapHidden}
+      haptics={settings.hapticsEnabled}
+      onToggle={toggleMap}
+      style={{ top, left: padH }}
     />
   );
+
+  // Sin mapa, el velocímetro se coloca al centro del espacio libre.
+  const pDialTop = insets.top + P.bar + portraitMapH - portraitDial * MAP_UNDER;
+  const pGroupH = portraitDial + 6;
+  const pReadoutsTop = pDialTop + pGroupH + spacing.sm;
+  const pRegionTop = insets.top + P.bar + 34;
+  const pHiddenScale = Math.max(1, Math.min(1.1, (pReadoutsTop - pRegionTop - 6) / pGroupH, (width - 6) / portraitDial));
+  const pHiddenDy = (pRegionTop + pReadoutsTop) / 2 - (pDialTop + pGroupH / 2);
+  const lHiddenDx = width / 2 - (width - padH - dialSize / 2);
 
   const cockpit = landscape ? (
     <View style={[styles.page, { width, paddingTop: spacing.xs, paddingBottom: bottomSpace }]}>
@@ -369,14 +409,18 @@ export default function SpeedScreen() {
       {map(
         { position: 'absolute', left: 0, top: 0, bottom: 0, width: width - padH - dialSize * 0.62 },
         { top: 0.24, bottom: 0.3, left: 0.06, right: 0.42 },
-        { x: 0.46, y: 0.6 }
+        { x: 0.46, y: 0.6 },
+        0.55
       )}
       <View style={{ paddingHorizontal: padH }}>{topBar}</View>
 
-      <View style={[styles.landscapeMain, { paddingRight: padH }]}>
-        <Animated.View entering={FadeIn.duration(600)} style={{ width: dialSize, height: dialSize }}>
-          {dial}
-        </Animated.View>
+      {/* box-none: esta fila ocupa todo el ancho y no debe tapar el mapa que hay debajo */}
+      <View style={[styles.landscapeMain, { paddingRight: padH }]} pointerEvents="box-none">
+        <DialGroup progress={mapVis} dx={lHiddenDx} dy={0} scale={1}>
+          <Animated.View entering={FadeIn.duration(600)} style={{ width: dialSize, height: dialSize }}>
+            {dial}
+          </Animated.View>
+        </DialGroup>
       </View>
 
       <View style={[styles.landscapeBottom, { height: L.bottom, paddingHorizontal: padH }]}>
@@ -387,6 +431,8 @@ export default function SpeedScreen() {
           <TripControl compact />
         </View>
       </View>
+      {/* Al final, para quedar encima de todo y poder tocarse siempre */}
+      {mapButton(spacing.xs + L.bar + 6)}
     </View>
   ) : (
     <View style={[styles.page, { width, paddingTop: insets.top, paddingBottom: bottomSpace + spacing.xs }]}>
@@ -395,23 +441,28 @@ export default function SpeedScreen() {
         { position: 'absolute', left: 0, right: 0, top: 0, height: portraitMapTotal },
         { top: 0.22, bottom: 0.4, left: 0.04, right: 0.04 },
         // La flecha, a media altura de la parte que se ve (sobre el dial).
-        { x: 0.5, y: (insets.top + P.bar + portraitMapH * 0.52) / portraitMapTotal }
+        { x: 0.5, y: (insets.top + P.bar + portraitMapH * 0.52) / portraitMapTotal },
+        (insets.top + P.bar + portraitMapH * 0.5) / portraitMapTotal
       )}
-      <View style={{ paddingHorizontal: padH }}>{topBar}</View>
-      <View style={{ height: portraitMapH }} pointerEvents="box-none" />
-
-      <Animated.View
-        entering={FadeIn.duration(600)}
-        style={[styles.dialWrap, { width: dialSize, height: dialSize, marginTop: -portraitDial * MAP_UNDER }]}
-      >
-        {dial}
-      </Animated.View>
-
-      <View style={[styles.dialFooter, { paddingHorizontal: padH }]}>
-        {odometer}
-        <View style={{ flex: 1 }} />
-        {limitSign}
+      <View style={{ paddingHorizontal: padH }} pointerEvents="box-none">
+        {topBar}
       </View>
+      <View style={{ height: portraitMapH }} pointerEvents="none" />
+
+      <DialGroup progress={mapVis} dx={0} dy={pHiddenDy} scale={pHiddenScale}>
+        <Animated.View
+          entering={FadeIn.duration(600)}
+          style={[styles.dialWrap, { width: dialSize, height: dialSize, marginTop: -portraitDial * MAP_UNDER }]}
+        >
+          {dial}
+        </Animated.View>
+
+        <View style={[styles.dialFooter, { paddingHorizontal: padH }]}>
+          {odometer}
+          <View style={{ flex: 1 }} />
+          {limitSign}
+        </View>
+      </DialGroup>
 
       <View style={[styles.portraitReadouts, { height: P.stats, paddingHorizontal: padH }]}>{readouts}</View>
       <View style={{ height: P.extra, paddingHorizontal: padH }}>{forces}</View>
@@ -422,6 +473,7 @@ export default function SpeedScreen() {
         <View style={[styles.pageDot, styles.pageDotOn]} />
         <View style={styles.pageDot} />
       </Pressable>
+      {mapButton(insets.top + P.bar + 4)}
     </View>
   );
 
@@ -691,10 +743,8 @@ export default function SpeedScreen() {
           name="Brújula"
           detail={
             sensors.compass.headingDeg != null
-              ? `${Math.round(sensors.compass.headingDeg)}°${
-                  sensors.compass.accuracyDeg != null && sensors.compass.accuracyDeg > 0
-                    ? ` ±${Math.round(sensors.compass.accuracyDeg)}°`
-                    : ''
+              ? `${Math.round(sensors.compass.headingDeg)}° · precisión ${
+                  ['sin calibrar', 'baja', 'media', 'alta'][sensors.compass.accuracyLevel ?? 0] ?? 'sin calibrar'
                 } · da el rumbo con el carro parado`
               : 'sin rumbo magnético'
           }
@@ -783,6 +833,33 @@ export default function SpeedScreen() {
       )}
     </View>
   );
+}
+
+/**
+ * Velocímetro (y lo que va pegado a él): con el mapa oculto se desplaza al
+ * centro del espacio libre y crece un poco, a la par del efecto del mapa.
+ */
+function DialGroup({
+  progress,
+  dx,
+  dy,
+  scale,
+  children,
+}: {
+  progress: SharedValue<number>;
+  dx: number;
+  dy: number;
+  scale: number;
+  children: React.ReactNode;
+}) {
+  const style = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: interpolate(progress.value, [0, 1], [dx, 0]) },
+      { translateY: interpolate(progress.value, [0, 1], [dy, 0]) },
+      { scale: interpolate(progress.value, [0, 1], [scale, 1]) },
+    ],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
 }
 
 /** Punto de grabación: late despacio mientras se graba, quieto en pausa. */

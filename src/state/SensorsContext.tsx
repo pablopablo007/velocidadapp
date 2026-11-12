@@ -48,8 +48,11 @@ export type SensorsState = {
   compass: {
     status: SensorStatus;
     headingDeg: number | null;
-    /** Precisión declarada por iOS en grados (menor es mejor). */
-    accuracyDeg: number | null;
+    /**
+     * Precisión de la brújula en niveles, como la entrega expo-location (no en
+     * grados): 3 = error menor a 20°, 2 = 20-35°, 1 = 35-50°, 0 = sin calibrar.
+     */
+    accuracyLevel: number | null;
   };
 };
 
@@ -64,7 +67,7 @@ const INITIAL: SensorsState = {
     longCalProgress: 0,
   },
   baro: { status: 'buscando', pressureHpa: null },
-  compass: { status: 'buscando', headingDeg: null, accuracyDeg: null },
+  compass: { status: 'buscando', headingDeg: null, accuracyLevel: null },
 };
 
 const G = 9.80665;
@@ -205,7 +208,7 @@ export function SensorsProvider({ children }: { children: React.ReactNode }) {
         compass: {
           status: 'activo',
           headingDeg: Number.isFinite(heading) ? heading : null,
-          accuracyDeg: h.accuracy ?? null,
+          accuracyLevel: h.accuracy ?? null,
         },
       };
     })
@@ -216,7 +219,7 @@ export function SensorsProvider({ children }: { children: React.ReactNode }) {
       .catch(() => {
         latest.current = {
           ...latest.current,
-          compass: { status: 'no-disponible', headingDeg: null, accuracyDeg: null },
+          compass: { status: 'no-disponible', headingDeg: null, accuracyLevel: null },
         };
       });
     return () => {

@@ -31,7 +31,10 @@ recuesta en las curvas, cabecea y enciende las luces de freno con las fuerzas me
 la app la aguja hace un barrido completo, como al dar contacto. El mapa no va en un recuadro: se
 funde con el negro (arriba en vertical, a la izquierda en horizontal). Abajo: kilómetros totales
 con ese carro, distancia, tiempo, media y máxima, y la señal de límite, que se toca para pasar
-entre los límites de Ecuador (50, 60, 90, 100 o sin aviso). La aguja, el tramo iluminado y la foto
+entre los límites de Ecuador (50, 60, 90, 100 o sin aviso). El botón «Ocultar mapa» deja solo la
+velocidad: el mapa se apaga como una pantalla de tubo (se aplasta en una línea de luz, la línea se
+encoge hasta un punto que destella) y el velocímetro se centra; «Mostrar mapa» lo enciende al
+revés. La elección se recuerda y, oculto, el mapa se desmonta para no gastar batería. La aguja, el tramo iluminado y la foto
 se mueven en el hilo de interfaz con Reanimated, a los cuadros de la pantalla (120 por segundo en
 el iPhone 15 Pro).
 
