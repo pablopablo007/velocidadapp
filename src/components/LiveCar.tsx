@@ -43,10 +43,19 @@ type Props = {
   /** Fuerza lateral para la cifra (se refresca unas 8 veces por segundo). */
   lateralG: number;
   active?: boolean;
+  /**
+   * Sin aro ni cifra: solo el carro y el carril, para ponerlo dentro de una
+   * tarjeta o bajo el velocímetro, que ya traen su propio marco y su cifra.
+   */
+  bare?: boolean;
+  /** Color del carril y del halo. Por defecto, el del carro. */
+  tint?: string;
 };
 
-function LiveCarBase({ size = 110, bodyType, lateralG, active = true }: Props) {
+function LiveCarBase({ size = 110, bodyType, lateralG, active = true, bare = false, tint }: Props) {
   const accent = useAccent();
+  const lane = tint ?? accent.accent;
+  const haloColor = tint ? `${tint}8C` : accent.glow;
 
   // Los sensores entregan 60 lecturas por segundo; el resorte las interpola
   // hasta la frecuencia de la pantalla y le da inercia de carrocería.
@@ -97,18 +106,26 @@ function LiveCarBase({ size = 110, bodyType, lateralG, active = true }: Props) {
             <Circle cx="60" cy="60" r="55.5" />
           </ClipPath>
         </Defs>
-        <Circle cx="60" cy="60" r="57" fill={colors.surface} stroke={colors.borderStrong} strokeWidth="1" />
-        <Circle cx="60" cy="60" r="56" fill="url(#lcSky)" />
+        {!bare && (
+          <>
+            <Circle cx="60" cy="60" r="57" fill={colors.surface} stroke={colors.borderStrong} strokeWidth="1" />
+            <Circle cx="60" cy="60" r="56" fill="url(#lcSky)" />
+          </>
+        )}
         {/* Bordes del carril: guía tenue bajo las rayas que corren */}
         {/* Todo el carril se recorta al círculo del reloj */}
-        <G clipPath="url(#lcClip)">
-          <Line x1="44" y1="44" x2="-2" y2="104" stroke={colors.track} strokeWidth="1" />
-          <Line x1="76" y1="44" x2="122" y2="104" stroke={colors.track} strokeWidth="1" />
+        <G clipPath={bare ? undefined : 'url(#lcClip)'}>
+          {!bare && (
+            <>
+              <Line x1="44" y1="44" x2="-2" y2="104" stroke={colors.track} strokeWidth="1" />
+              <Line x1="76" y1="44" x2="122" y2="104" stroke={colors.track} strokeWidth="1" />
+            </>
+          )}
           {Array.from({ length: DASHES }, (_, i) => (
-            <LaneDash key={`l${i}`} road={road} index={i} side={-1} color={accent.accent} />
+            <LaneDash key={`l${i}`} road={road} index={i} side={-1} color={lane} fade={bare} />
           ))}
           {Array.from({ length: DASHES }, (_, i) => (
-            <LaneDash key={`r${i}`} road={road} index={i} side={1} color={accent.accent} />
+            <LaneDash key={`r${i}`} road={road} index={i} side={1} color={lane} fade={bare} />
           ))}
         </G>
       </Svg>
@@ -123,8 +140,8 @@ function LiveCarBase({ size = 110, bodyType, lateralG, active = true }: Props) {
             height: size * 0.1,
             left: size * 0.22,
             top: size * 0.69,
-            backgroundColor: accent.glow,
-            shadowColor: accent.accent,
+            backgroundColor: haloColor,
+            shadowColor: lane,
           },
           halo,
         ]}
@@ -173,6 +190,7 @@ function LiveCarBase({ size = 110, bodyType, lateralG, active = true }: Props) {
       </Animated.View>
 
       {/* Cifra: fuerza lateral medida */}
+      {!bare && (
       <View style={styles.readout} pointerEvents="none">
         <Text style={styles.label}>curva</Text>
         <Text style={[styles.value, { fontSize: size * 0.13 }]}>
@@ -180,6 +198,7 @@ function LiveCarBase({ size = 110, bodyType, lateralG, active = true }: Props) {
           <Text style={styles.unit}> g</Text>
         </Text>
       </View>
+      )}
     </View>
   );
 }
@@ -193,11 +212,14 @@ function LaneDash({
   index,
   side,
   color,
+  fade = false,
 }: {
   road: { value: number };
   index: number;
   side: 1 | -1;
   color: string;
+  /** Sin aro que las recorte, las rayas se desvanecen antes de llegar abajo. */
+  fade?: boolean;
 }) {
   const animatedProps = useAnimatedProps(() => {
     'worklet';
@@ -213,7 +235,7 @@ function LaneDash({
       x2: x(b),
       y2: y(b),
       strokeWidth: 0.6 + 1.6 * u,
-      strokeOpacity: Math.min(1, u * 2.2) * 0.75,
+      strokeOpacity: Math.min(1, u * 2.2) * 0.75 * (fade ? Math.max(0, Math.min(1, (0.98 - u) / 0.3)) : 1),
     };
   });
   return <AnimatedLine animatedProps={animatedProps} stroke={color} strokeLinecap="round" />;

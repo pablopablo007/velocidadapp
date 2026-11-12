@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { memo, useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -338,9 +339,122 @@ export function DashStat({
   );
 }
 
+// ---------------------------------------------------------------- StatCard
+
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+/**
+ * Tarjeta de un dato del viaje: ícono, nombre y cifra, con un resplandor del
+ * color indicado en el borde derecho.
+ */
+export const StatCard = memo(function StatCard({
+  icon,
+  label,
+  value,
+  unit,
+  tint = colors.text,
+  glow,
+  large = false,
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+  unit?: string;
+  /** Color del ícono y, si se quiere destacar, de la cifra. */
+  tint?: string;
+  /** Color del resplandor del borde; por defecto, el del ícono. */
+  glow?: string;
+  /** Más alta y con la cifra más grande (tablero en horizontal). */
+  large?: boolean;
+}) {
+  const edge = glow ?? tint;
+  return (
+    <View style={[styles.statCard, large && styles.statCardLarge]}>
+      <LinearGradient
+        colors={[`${edge}00`, `${edge}26`]}
+        start={{ x: 0.45, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={[styles.statCardEdge, { backgroundColor: edge }]} />
+      <Ionicons name={icon} size={large ? 24 : 19} color={tint} style={styles.statCardIcon} />
+      <View style={styles.statCardBody}>
+        <Text style={[styles.statCardLabel, large && styles.statCardLabelLarge]} numberOfLines={1}>
+          {label}
+        </Text>
+        <Text
+          style={[styles.statCardValue, large && styles.statCardValueLarge, { color: tint === colors.textMuted ? colors.text : tint }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.65}
+        >
+          {value}
+          {!!unit && <Text style={styles.statCardUnit}> {unit}</Text>}
+        </Text>
+      </View>
+    </View>
+  );
+});
+
+/** Celda de la fila inferior del tablero: algo a la izquierda, nombre y cifra. */
+export function InfoCell({
+  lead,
+  label,
+  value,
+  tint = colors.text,
+}: {
+  /** Ícono o mini instrumento a la izquierda. */
+  lead: React.ReactNode;
+  label: string;
+  value: string;
+  tint?: string;
+}) {
+  return (
+    <View style={styles.infoCell}>
+      {lead}
+      <View style={styles.infoBody}>
+        <Text style={styles.infoLabel} numberOfLines={1}>
+          {label}
+        </Text>
+        <Text style={[styles.infoValue, { color: tint }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.55 },
+
+  statCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  statCardLarge: { paddingHorizontal: spacing.lg, gap: spacing.lg },
+  statCardEdge: { position: 'absolute', right: 0, top: '30%', bottom: '30%', width: 1.5, opacity: 0.55 },
+  statCardIcon: { width: 26, textAlign: 'center' },
+  statCardBody: { flex: 1 },
+  statCardLabel: { fontSize: 10, color: colors.textMuted, fontFamily: fonts.medium, letterSpacing: 0.2 },
+  statCardLabelLarge: { fontSize: 12 },
+  statCardValue: { fontFamily: fonts.medium, fontSize: 17, lineHeight: 21, letterSpacing: -0.2 },
+  statCardValueLarge: { fontSize: 26, lineHeight: 31 },
+  statCardUnit: { fontSize: 11, fontFamily: fonts.regular, color: colors.textMuted },
+
+  infoCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm },
+  infoBody: { flex: 1 },
+  infoLabel: { fontSize: 9.5, color: colors.textMuted, fontFamily: fonts.medium, letterSpacing: 0.2 },
+  infoValue: { fontSize: 15, lineHeight: 19, fontFamily: fonts.medium },
 
   miniLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '500', marginTop: 4 },
   miniValue: { fontFamily: fonts.medium, color: colors.text, marginVertical: -2 },

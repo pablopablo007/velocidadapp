@@ -23,12 +23,14 @@ React Native + Expo SDK 58. Uso personal.
 marcha ni consumo, así que la app no los muestra ni los inventa. Lo que se calcula (la
 potencia según el aire) dice de qué medida sale.
 
-**Cabina** — Tablero digital en grafito, blanco y rojo, con cifras en Chakra Petch. Dial con
-banda oscura, marcas que se encienden al pasar la velocidad, muesca roja en el límite y
-punto en la máxima de la sesión. Debajo: altitud, círculo de fuerzas G y potencia
-disponible; distancia, tiempo y máxima; pendiente y rumbo. **Al girar el iPhone** el
-tablero pasa a pantalla completa (sin barra de pestañas ni de estado): dial al centro,
-altitud y distancia a la izquierda, fuerzas G y tiempo a la derecha, barras abajo.
+**Cabina** — Tablero digital en grafito, con el color de cada carro (rojo el Polo, blanco
+la Pick Up) y cifras en Chakra Petch. De arriba abajo: nombre del carro, dial con aro
+luminoso (se enciende hasta la velocidad actual, muesca roja en el límite, punto en la
+máxima de la sesión), tarjeta del carro en vivo (se inclina en curva, cabecea y enciende
+los frenos) junto a distancia, tiempo y máxima; mapa en miniatura que sigue al carro con el
+recorrido; fila de aceleración, pendiente y presión; y el control del viaje. **Al girar el
+iPhone** el tablero pasa a pantalla completa y se vuelve azul: mapa a la izquierda, dial al
+centro con el carro en el hueco inferior del aro y los datos del viaje a la derecha.
 
 **Sensores del iPhone 15 Pro** —
 - *GPS L1 + L5*: velocidad Doppler (no restando posiciones), altitud, rumbo y traza.
@@ -99,7 +101,6 @@ Otros comandos:
 ```bash
 npm run typecheck      # comprueba tipos
 npm run test:engine    # simulación de conducción contra el motor de cálculo
-npm run preview:gauge  # dibuja el velocímetro en un HTML, para verlo sin el teléfono
 python tools/recortar-foto.py foto.jpg assets/images/polo-track.png  # quita el fondo blanco a otra foto
 npm run icons          # regenera los iconos de la app
 ```
@@ -196,8 +197,23 @@ Decisiones que importan:
   recorrido con una fracción de los puntos.
 - **La geometría del dial vive aparte del componente** (`src/utils/gauge.ts`) y tiene sus
   propias comprobaciones. Ahí se coló un error de 180° que dejaba la aguja apuntando
-  arriba-derecha con el carro parado; ahora un test lo impide. `npm run preview:gauge`
-  dibuja el dial a varias velocidades en un HTML para revisarlo sin el teléfono.
+  arriba-derecha con el carro parado; ahora un test lo impide.
+- **Vista previa en el navegador** (`tools/preview/`). Para ver la pantalla real sin el
+  teléfono, con un GPS simulado a la velocidad que se quiera:
+
+  ```bash
+  npm install --no-save react-native-web@~0.21.4
+  cp tools/preview/metro.config.js metro.config.js      # temporal: no se sube
+  npx expo export -p web --output-dir .preview/dist
+  # vertical (área útil de un iPhone 15 Pro) y horizontal; SPEED en km/h
+  DIST=$PWD/.preview/dist SPEED=44 node tools/preview/shot.js vertical.png 393 759 "/?wid=1" 4500
+  DIST=$PWD/.preview/dist SPEED=44 node tools/preview/shot.js horizontal.png 766 380 "/?wid=1" 4500
+  rm metro.config.js
+  ```
+
+  Necesita Playwright. El mapa y la base de datos se sustituyen por maquetas (el mapa de
+  Apple y SQLite solo existen en el teléfono) y los sensores de movimiento no están, así
+  que sirve para revisar el diseño, no las medidas.
 
 ### Verificación
 

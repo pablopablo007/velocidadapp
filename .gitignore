@@ -23,3 +23,6 @@ yarn-error.*
 .DS_Store
 .env
 .env.local
+
+# Vista previa en navegador (tools/preview)
+.preview/

@@ -49,13 +49,15 @@ type Props = {
   longG: number;
   /** `true` si ya manda el acelerómetro; si no, la lectura es la del GPS. */
   calibrated: boolean;
+  /** Solo el aro, sin cifra ni marcas: para llevarlo pequeño junto a un texto. */
+  compact?: boolean;
 };
 
-function AccelRingBase({ size = 110, longG, calibrated }: Props) {
+function AccelRingBase({ size = 110, longG, calibrated, compact = false }: Props) {
   const accent = useAccent();
   const c = size / 2;
-  const stroke = Math.max(5, size * 0.065);
-  const r = size / 2 - stroke / 2 - size * 0.07;
+  const stroke = compact ? Math.max(3.5, size * 0.11) : Math.max(5, size * 0.065);
+  const r = size / 2 - stroke / 2 - (compact ? stroke * 0.6 : size * 0.07);
   const circumference = 2 * Math.PI * r;
   const half = circumference / 2;
 
@@ -150,7 +152,7 @@ function AccelRingBase({ size = 110, longG, calibrated }: Props) {
         {/* Pista y marcas */}
         <Circle cx={c} cy={c} r={r} stroke={colors.surfaceStrong} strokeWidth={stroke} fill="none" />
         <Circle cx={c} cy={c} r={r + stroke / 2 + 1} stroke={colors.border} strokeWidth={1} fill="none" />
-        {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
+        {(compact ? [] : [0, 45, 90, 135, 180, 225, 270, 315]).map((deg) => {
           const a = ((deg - 90) * Math.PI) / 180;
           const r1 = r + stroke / 2 + 3;
           const r2 = r1 + (deg % 90 === 0 ? 4 : 2.5);
@@ -238,6 +240,7 @@ function AccelRingBase({ size = 110, longG, calibrated }: Props) {
       </Animated.View>
 
       {/* Cifra */}
+      {!compact && (
       <View style={[StyleSheet.absoluteFill, styles.center]} pointerEvents="none">
         <Text style={[styles.state, { color: tint }]}>{state}</Text>
         <Text style={[styles.value, { fontSize: size * 0.2 }]} numberOfLines={1}>
@@ -245,6 +248,7 @@ function AccelRingBase({ size = 110, longG, calibrated }: Props) {
         </Text>
         <Text style={styles.unit}>{calibrated ? 'g' : 'g · gps'}</Text>
       </View>
+      )}
     </View>
   );
 }
