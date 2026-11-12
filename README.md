@@ -204,6 +204,13 @@ Decisiones que importan:
 - **La geometría del dial vive aparte del componente** (`src/utils/gauge.ts`) y tiene sus
   propias comprobaciones. Ahí se coló un error de 180° que dejaba la aguja apuntando
   arriba-derecha con el carro parado; ahora un test lo impide.
+- **Lo que corre en el hilo de interfaz solo puede llamar a "worklets".** Los callbacks de
+  `useAnimatedStyle`, `useAnimatedProps`, `useDerivedValue`, etc. corren en el hilo de interfaz;
+  si llaman a una función normal, en el iPhone la app se cierra al dibujar esa pantalla (así se
+  cerraba la 1.6.0 al aparecer el tablero). En el navegador no falla, por eso existe
+  `npm run check:worklets`, que lo busca y corre en cada compilación.
+- **Red de seguridad** (`src/components/CrashGuard.tsx`): en la versión final, un error de
+  JavaScript que se escape muestra qué falló y deja reintentar, en lugar de cerrar la app.
 - **Vista previa en el navegador** (`tools/preview/`). Para ver la pantalla real sin el
   teléfono, con un GPS simulado a la velocidad que se quiera:
 

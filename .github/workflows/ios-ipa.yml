@@ -42,6 +42,7 @@ jobs:
           npm run typecheck
           npm run lint
           npm run test:engine
+          npm run check:worklets
 
       - name: Generar el proyecto iOS (prebuild + CocoaPods)
         env:

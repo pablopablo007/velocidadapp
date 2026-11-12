@@ -18,6 +18,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // expo-task-manager: `defineTask` debe ejecutarse antes de que iOS la invoque).
 import '@/services/backgroundLocation';
 
+import { CrashGuard, installCrashGuard } from '@/components/CrashGuard';
 import { CarPlaySync } from '@/state/CarPlaySync';
 import { SensorsProvider } from '@/state/SensorsContext';
 import { SettingsProvider } from '@/state/SettingsContext';
@@ -30,14 +31,17 @@ import { colors } from '@/theme/theme';
 // aparecerían un instante con la fuente del sistema y luego saltarían.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// Lo antes posible: un error que se escape muestra un aviso en vez de cerrar la app.
+installCrashGuard();
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     ChakraPetch_300Light,
     ChakraPetch_400Regular,
     ChakraPetch_500Medium,
     ChakraPetch_600SemiBold,
-      ChakraPetch_700Bold,
-    });
+    ChakraPetch_700Bold,
+  });
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
@@ -53,34 +57,36 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>
-        <SettingsProvider>
-          <AccentProvider>
-          <TrackingProvider>
-          <VehicleSwitchProvider>
-            <SensorsProvider>
-            <CarPlaySync />
-            <StatusBar style="light" />
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: colors.bg },
-              }}
-            >
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen
-                name="trip/[id]"
-                options={{ presentation: 'card', animation: 'slide_from_right' }}
-              />
-              <Stack.Screen
-                name="car-photos"
-                options={{ presentation: 'card', animation: 'slide_from_right' }}
-              />
-            </Stack>
-            </SensorsProvider>
-          </VehicleSwitchProvider>
-          </TrackingProvider>
-          </AccentProvider>
-        </SettingsProvider>
+        <CrashGuard>
+          <SettingsProvider>
+            <AccentProvider>
+              <TrackingProvider>
+                <VehicleSwitchProvider>
+                  <SensorsProvider>
+                    <CarPlaySync />
+                    <StatusBar style="light" />
+                    <Stack
+                      screenOptions={{
+                        headerShown: false,
+                        contentStyle: { backgroundColor: colors.bg },
+                      }}
+                    >
+                      <Stack.Screen name="(tabs)" />
+                      <Stack.Screen
+                        name="trip/[id]"
+                        options={{ presentation: 'card', animation: 'slide_from_right' }}
+                      />
+                      <Stack.Screen
+                        name="car-photos"
+                        options={{ presentation: 'card', animation: 'slide_from_right' }}
+                      />
+                    </Stack>
+                  </SensorsProvider>
+                </VehicleSwitchProvider>
+              </TrackingProvider>
+            </AccentProvider>
+          </SettingsProvider>
+        </CrashGuard>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

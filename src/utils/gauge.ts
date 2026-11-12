@@ -31,8 +31,16 @@ export function arcPath(cx: number, cy: number, r: number, startDeg: number, end
   return `M ${a.x} ${a.y} A ${r} ${r} 0 ${largeArc} 1 ${b.x} ${b.y}`;
 }
 
-/** Ángulo del dial que corresponde a un valor. */
+/**
+ * Ángulo del dial que corresponde a un valor.
+ *
+ * Es un "worklet": la aguja la llama desde el hilo de interfaz, donde solo se
+ * pueden ejecutar funciones marcadas así. Sin la marca, en el iPhone la app se
+ * cierra al dibujar el tablero (en el navegador no falla, porque ahí todo corre
+ * en un solo hilo).
+ */
 export function gaugeDegFor(value: number, max: number): number {
+  'worklet';
   if (max <= 0) return GAUGE_START_DEG;
   const acotado = Math.max(0, Math.min(value, max));
   return GAUGE_START_DEG + (acotado / max) * GAUGE_SWEEP_DEG;

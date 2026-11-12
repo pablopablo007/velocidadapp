@@ -10,7 +10,8 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "icons": "python tools/generar-iconos.py",
-    "test:engine": "tsc -p tools/tsconfig.sim.json && node tools/simulate-drive.js"
+    "test:engine": "tsc -p tools/tsconfig.sim.json && node tools/simulate-drive.js",
+    "check:worklets": "node tools/check-worklets.js"
   },
   "dependencies": {
     "@expo-google-fonts/chakra-petch": "^0.4.1",
