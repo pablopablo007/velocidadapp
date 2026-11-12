@@ -1,75 +1,61 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
+import Animated, {
+  Easing,
+  useAnimatedProps,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
+import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
+import { scheduleOnRN } from 'react-native-worklets';
 
-import { useSmoothValue } from '@/hooks/useSmoothValue';
 import { colors, fonts } from '@/theme/theme';
-import {
-  GAUGE_START_DEG as START_DEG,
-  GAUGE_SWEEP_DEG as SWEEP_DEG,
-  arcPath,
-  gaugeDegFor,
-  polar,
-} from '@/utils/gauge';
+import { GAUGE_START_DEG as START, GAUGE_SWEEP_DEG as SWEEP, arcPath, gaugeDegFor, polar } from '@/utils/gauge';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedSvgText = Animated.createAnimatedComponent(SvgText);
 
 type Props = {
   /** Velocidad ya convertida a la unidad que se muestra. */
   value: number;
   max: number;
   unitLabel: string;
-  /** Marca de velocidad máxima alcanzada (misma unidad). */
+  /** Máxima de la sesión (misma unidad). */
   peak?: number;
-  /** Marca del límite configurado (misma unidad). */
+  /** Límite configurado (misma unidad). */
   limit?: number | null;
-  /** Velocidad máxima del vehículo: tramo final en rojo (misma unidad). */
+  /** Velocidad máxima del carro: desde ahí el aro es rojo (misma unidad). */
   vehicleTop?: number | null;
   size?: number;
   overLimit?: boolean;
-  /** Texto pequeño sobre la cifra. Por defecto, "velocidad". */
-  caption?: string;
-  /** Color con el que se enciende el dial: el del carro, o azul en horizontal. */
+  /** Color de la aguja y del tramo recorrido: el del carro. */
   tint?: string;
-  /** Desplaza la lectura central, en fracción del tamaño (negativo = arriba). */
-  centerShift?: number;
+  /** Lo que va en el centro del aro (la foto del carro). */
+  children?: React.ReactNode;
 };
 
-type Geometry = {
-  size: number;
-  cx: number;
-  cy: number;
-  rRim: number;
-  tickOuter: number;
-  majorLen: number;
-  minorLen: number;
-  rNumbers: number;
-};
-
-function geometryFor(size: number): Geometry {
-  const rRim = size / 2 - size * 0.045; // deja sitio al resplandor por fuera
-  const tickOuter = rRim - size * 0.02;
-  const majorLen = size * 0.05;
-  return {
-    size,
-    cx: size / 2,
-    cy: size / 2,
-    rRim,
-    tickOuter,
-    majorLen,
-    minorLen: size * 0.022,
-    rNumbers: tickOuter - majorLen - size * 0.052,
-  };
-}
+/** El barrido de encendido se hace una vez por sesión, no en cada giro del teléfono. */
+let ignitionDone = false;
 
 /**
- * Velocímetro de tablero digital.
+ * Velocímetro de cabina digital, en el estilo de los tableros de Volkswagen:
+ * un aro fino, las cifras por fuera con puntos entre ellas, una aguja corta
+ * que cruza el aro y el tramo recorrido iluminado detrás de ella. En el
+ * centro, la foto del carro; abajo, la velocidad en cifras.
  *
- * Un aro con las marcas y las cifras por dentro. El aro lleva una luz propia
- * del color del carro y, encima, el tramo recorrido se enciende con
- * resplandor hasta la velocidad actual. Sin aguja: la cifra central es la
- * lectura y el aro, el contexto.
+ * Fluidez: la aguja, el tramo iluminado y el brillo de las cifras se mueven
+ * en el hilo de interfaz con Reanimated, a los cuadros de la pantalla (120 por
+ * segundo en ProMotion). El GPS da una lectura por segundo y la aguja recorre
+ * el camino entre una y otra sin saltos. React solo vuelve a dibujar la cifra
+ * cuando cambia de número.
  *
- * Va en dos capas: la fija (aro, marcas, cifras, zona roja) se dibuja una vez
- * y la viva (tramo encendido) es lo único que cambia cuadro a cuadro.
+ * Al abrir la app la aguja hace un barrido completo, como al dar contacto.
  */
 function SpeedometerBase({
   value,
@@ -80,235 +66,295 @@ function SpeedometerBase({
   vehicleTop = null,
   size = 320,
   overLimit = false,
-  caption = 'velocidad',
   tint = colors.text,
-  centerShift = 0,
+  children,
 }: Props) {
-  // La cifra muestra la velocidad real aunque supere la escala; solo el aro
-  // se detiene en el tope del dial.
-  const shown = useSmoothValue(Math.max(0, value), 240, 0.05);
-  const smooth = Math.min(shown, max);
+  const g = useMemo(() => geometry(size), [size]);
 
-  const g = useMemo(() => geometryFor(size), [size]);
-  const majorStep = max <= 260 ? 20 : 40;
-  const minorStep = majorStep / 4;
-  const lit = overLimit ? colors.danger : tint;
-  const moving = smooth > 0.5;
+  // Velocidad animada: recorre el camino hasta la nueva lectura en lo que
+  // tarda en llegar la siguiente.
+  const speed = useSharedValue(Math.max(0, value));
+  useEffect(() => {
+    speed.set(withTiming(Math.max(0, Math.min(value, max * 1.02)), { duration: 900, easing: Easing.out(Easing.quad) }));
+  }, [value, max, speed]);
 
-  // Marcas encendidas: un solo trazo con todas las que ya pasó la velocidad.
-  // Solo se recalcula cuando la velocidad cruza una marca nueva.
-  const litCount = moving ? Math.floor((smooth + 0.01) / minorStep) : -1;
-  const litTicks = useMemo(() => {
-    let d = '';
-    for (let i = 0; i <= litCount; i++) {
-      const v = i * minorStep;
-      const major = Math.abs(v % majorStep) < 0.001;
-      const deg = gaugeDegFor(v, max);
-      const a = polar(g.cx, g.cy, g.tickOuter, deg);
-      const b = polar(g.cx, g.cy, g.tickOuter - (major ? g.majorLen : g.minorLen), deg);
-      d += `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} L ${b.x.toFixed(1)} ${b.y.toFixed(1)} `;
-    }
-    return d;
-  }, [litCount, minorStep, majorStep, max, g]);
+  // Barrido de encendido: sube hasta el tope y vuelve.
+  const sweep = useSharedValue(0);
+  useEffect(() => {
+    if (ignitionDone) return;
+    ignitionDone = true;
+    sweep.set(
+      withDelay(
+        250,
+        withSequence(
+          withTiming(max, { duration: 950, easing: Easing.inOut(Easing.cubic) }),
+          withDelay(120, withTiming(0, { duration: 800, easing: Easing.inOut(Easing.cubic) }))
+        )
+      )
+    );
+  }, [max, sweep]);
 
-  const progress = moving ? arcPath(g.cx, g.cy, g.rRim, START_DEG, gaugeDegFor(smooth, max)) : null;
-  const peakMark =
-    peak > 0.5 && peak <= max ? polar(g.cx, g.cy, g.rRim + size * 0.026, gaugeDegFor(peak, max)) : null;
+  const needle = useDerivedValue(() => Math.min(max, Math.max(speed.value, sweep.value)));
 
   return (
     <View style={{ width: size, height: size }}>
-      <DialFace g={g} max={max} tint={tint} limit={limit} vehicleTop={vehicleTop} />
+      <DialFace g={g} max={max} limit={limit} vehicleTop={vehicleTop} />
+      <LiveLayer g={g} max={max} needle={needle} tint={overLimit ? colors.danger : tint} peak={peak} />
 
-      {/* Capa viva: tramo encendido hasta la velocidad actual */}
-      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        {progress && (
-          <>
-            <Path d={progress} stroke={lit} strokeOpacity={0.1} strokeWidth={size * 0.075} strokeLinecap="round" fill="none" />
-            <Path d={progress} stroke={lit} strokeOpacity={0.22} strokeWidth={size * 0.038} strokeLinecap="round" fill="none" />
-            <Path d={progress} stroke={lit} strokeWidth={size * 0.014} strokeLinecap="round" fill="none" />
-          </>
-        )}
-        {litTicks !== '' && <Path d={litTicks} stroke={lit} strokeWidth={2.2} strokeLinecap="round" fill="none" />}
-        {/* Máxima de la sesión: punto sobre el borde exterior */}
-        {peakMark && <Circle cx={peakMark.x} cy={peakMark.y} r={size * 0.01} fill={colors.text} />}
-      </Svg>
+      {/* Centro: la foto del carro */}
+      <View style={[styles.center, { top: g.cy - g.ring * 0.78, height: g.ring * 1.02 }]} pointerEvents="none">
+        {children}
+      </View>
 
-      {/* Lectura central */}
-      <View
-        style={[StyleSheet.absoluteFill, styles.center, { transform: [{ translateY: size * centerShift }] }]}
-        pointerEvents="none"
-      >
-        <Text
-          style={[
-            styles.caption,
-            { fontSize: size * 0.045, color: overLimit ? colors.danger : colors.textMuted },
-          ]}
-        >
-          {caption}
-        </Text>
-        <Text
-          style={[
-            styles.value,
-            {
-              fontSize: size * 0.3,
-              lineHeight: size * 0.33,
-              color: overLimit ? colors.danger : colors.text,
-              textShadowColor: overLimit ? colors.danger : lit,
-              textShadowRadius: moving ? size * 0.05 : 0,
-            },
-          ]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.6}
-          allowFontScaling={false}
-        >
-          {Math.round(shown)}
-        </Text>
-        <Text style={[styles.unit, { fontSize: size * 0.052 }]}>{unitLabel}</Text>
+      {/* Velocidad en cifras, abajo dentro del aro */}
+      <View style={[styles.readout, { top: g.cy + g.ring * 0.2 }]} pointerEvents="none">
+        <SpeedDigits speed={speed} initial={Math.round(Math.max(0, value))} size={size} overLimit={overLimit} />
+        <Text style={[styles.unit, { fontSize: size * 0.04 }]}>{unitLabel}</Text>
       </View>
     </View>
   );
 }
 
-/**
- * Capa fija del dial. Memorizada: no se vuelve a dibujar mientras la
- * velocidad cambia, solo si cambia el tamaño, la escala o el color.
- */
+type Geometry = ReturnType<typeof geometry>;
+
+function geometry(size: number) {
+  const cx = size / 2;
+  const cy = size / 2;
+  return {
+    size,
+    cx,
+    cy,
+    /** Aro fino. */
+    ring: size * 0.395,
+    /** Cifras de la escala. */
+    numbers: size * 0.462,
+    /** Puntos entre cifras. */
+    dots: size * 0.462,
+    arcLen: 2 * Math.PI * size * 0.395 * (SWEEP / 360),
+    circumference: 2 * Math.PI * size * 0.395,
+  };
+}
+
+function scaleSteps(max: number) {
+  const major = max <= 220 ? 20 : 40;
+  return { major, minor: major / 2 };
+}
+
+/** Lo que no se mueve: aro, cifras, puntos, zona roja y límite. Se dibuja una vez. */
 const DialFace = memo(function DialFace({
   g,
   max,
-  tint,
   limit,
   vehicleTop,
 }: {
   g: Geometry;
   max: number;
-  tint: string;
   limit: number | null;
   vehicleTop: number | null;
 }) {
-  const { size, cx, cy, rRim } = g;
-  const majorStep = max <= 260 ? 20 : 40;
-  const minorStep = majorStep / 4;
+  const { size, cx, cy } = g;
+  const { major, minor } = scaleSteps(max);
+  const dots: number[] = [];
+  for (let v = minor; v < max; v += major) dots.push(v);
 
-  const ticks: { v: number; major: boolean }[] = [];
-  for (let v = 0; v <= max + 0.001; v += minorStep) {
-    ticks.push({ v, major: Math.abs(v % majorStep) < 0.001 });
-  }
-
-  const sweep = arcPath(cx, cy, rRim, START_DEG, START_DEG + SWEEP_DEG);
   const redFrom = vehicleTop != null && vehicleTop < max ? vehicleTop : null;
-  const redArc = redFrom != null ? arcPath(cx, cy, rRim, gaugeDegFor(redFrom, max), START_DEG + SWEEP_DEG) : null;
-  const limitMark =
-    limit != null && limit > 0 && limit <= max
-      ? {
-          a: polar(cx, cy, rRim + size * 0.02, gaugeDegFor(limit, max)),
-          b: polar(cx, cy, g.tickOuter - g.majorLen - size * 0.01, gaugeDegFor(limit, max)),
-        }
-      : null;
+  const limitDot = limit != null && limit > 0 && limit <= max ? polar(cx, cy, g.ring - size * 0.03, gaugeDegFor(limit, max)) : null;
 
   return (
     <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-      <Defs>
-        {/* Fondo del dial: un poco más claro al centro, da profundidad */}
-        <RadialGradient id="dialFace" cx={cx} cy={cy} r={rRim} gradientUnits="userSpaceOnUse">
-          <Stop offset="0" stopColor="#17171B" stopOpacity="0.95" />
-          <Stop offset="0.7" stopColor="#0C0C0E" stopOpacity="0.9" />
-          <Stop offset="1" stopColor="#050506" stopOpacity="0.85" />
-        </RadialGradient>
-        {/* Luz del aro: fuerte donde arranca la escala y se apaga hacia arriba */}
-        <LinearGradient id="dialRim" x1={0} y1={size} x2={size} y2={size * 0.2} gradientUnits="userSpaceOnUse">
-          <Stop offset="0" stopColor={tint} stopOpacity="1" />
-          <Stop offset="0.5" stopColor={tint} stopOpacity="0.12" />
-          <Stop offset="1" stopColor={tint} stopOpacity="0.32" />
-        </LinearGradient>
-      </Defs>
-
-      <Circle cx={cx} cy={cy} r={rRim - size * 0.008} fill="url(#dialFace)" />
-
-      {/* Aro: base oscura y luz propia con resplandor */}
-      <Path d={sweep} stroke={colors.surfaceStrong} strokeWidth={size * 0.014} strokeLinecap="round" fill="none" />
-      <Path d={sweep} stroke="url(#dialRim)" strokeOpacity={0.12} strokeWidth={size * 0.07} strokeLinecap="round" fill="none" />
-      <Path d={sweep} stroke="url(#dialRim)" strokeOpacity={0.28} strokeWidth={size * 0.03} strokeLinecap="round" fill="none" />
-      <Path d={sweep} stroke="url(#dialRim)" strokeOpacity={0.9} strokeWidth={size * 0.007} strokeLinecap="round" fill="none" />
-
-      {/* Tramo final: por encima de la velocidad máxima del carro */}
-      {redArc && (
-        <>
-          <Path d={redArc} stroke={colors.danger} strokeOpacity={0.18} strokeWidth={size * 0.07} fill="none" />
-          <Path d={redArc} stroke={colors.danger} strokeOpacity={0.9} strokeWidth={size * 0.026} fill="none" />
-        </>
-      )}
-
-      {/* Marcas */}
-      {ticks.map(({ v, major }) => {
-        const deg = gaugeDegFor(v, max);
-        const a = polar(cx, cy, g.tickOuter, deg);
-        const b = polar(cx, cy, g.tickOuter - (major ? g.majorLen : g.minorLen), deg);
-        return (
-          <Line
-            key={v}
-            x1={a.x}
-            y1={a.y}
-            x2={b.x}
-            y2={b.y}
-            stroke={major ? colors.text : colors.textMuted}
-            strokeOpacity={major ? 0.9 : 0.45}
-            strokeWidth={major ? 2.2 : 1}
-            strokeLinecap="round"
-          />
-        );
-      })}
-
-      {/* Cifras por dentro de las marcas */}
-      {ticks
-        .filter((t) => t.major)
-        .map(({ v }) => {
-          const p = polar(cx, cy, g.rNumbers, gaugeDegFor(v, max));
-          return (
-            <SvgText
-              key={`n${v}`}
-              x={p.x}
-              y={p.y + size * 0.017}
-              fill={colors.text}
-              fillOpacity={0.86}
-              fontSize={size * 0.048}
-              fontFamily={fonts.medium}
-              textAnchor="middle"
-            >
-              {String(Math.round(v))}
-            </SvgText>
-          );
-        })}
-
-      {/* Límite: muesca roja que cruza las marcas */}
-      {limitMark && (
-        <Line
-          x1={limitMark.a.x}
-          y1={limitMark.a.y}
-          x2={limitMark.b.x}
-          y2={limitMark.b.y}
+      {/* Fondo del centro: oscurece lo que haya detrás (el mapa) */}
+      <Circle cx={cx} cy={cy} r={g.ring} fill={colors.bg} fillOpacity={0.86} />
+      {/* Aro completo, muy tenue, y el tramo de la escala algo más visible */}
+      <Circle cx={cx} cy={cy} r={g.ring} stroke={colors.text} strokeOpacity={0.1} strokeWidth={1} fill="none" />
+      <Path d={arcPath(cx, cy, g.ring, START, START + SWEEP)} stroke={colors.text} strokeOpacity={0.22} strokeWidth={1.4} fill="none" />
+      {redFrom != null && (
+        <Path
+          d={arcPath(cx, cy, g.ring, gaugeDegFor(redFrom, max), START + SWEEP)}
           stroke={colors.danger}
-          strokeWidth={3}
-          strokeLinecap="round"
+          strokeOpacity={0.85}
+          strokeWidth={2}
+          fill="none"
         />
       )}
+      {dots.map((v) => {
+        const p = polar(cx, cy, g.dots, gaugeDegFor(v, max));
+        return <Circle key={v} cx={p.x} cy={p.y} r={size * 0.0055} fill={colors.textMuted} fillOpacity={0.55} />;
+      })}
+      {limitDot && <Circle cx={limitDot.x} cy={limitDot.y} r={size * 0.009} fill={colors.danger} />}
     </Svg>
   );
 });
 
+/** Lo que se mueve: tramo iluminado, cifras que se encienden y aguja. */
+const LiveLayer = memo(function LiveLayer({
+  g,
+  max,
+  needle,
+  tint,
+  peak,
+}: {
+  g: Geometry;
+  max: number;
+  needle: SharedValue<number>;
+  tint: string;
+  peak: number;
+}) {
+  const { size, cx, cy } = g;
+  const { major } = scaleSteps(max);
+  const numbers: number[] = [];
+  for (let v = 0; v <= max + 0.001; v += major) numbers.push(v);
+
+  // El tramo recorrido es un trazo discontinuo sobre el aro: su desfase deja
+  // ver solo la parte hasta la aguja.
+  const trail = useAnimatedProps(() => ({
+    strokeDashoffset: g.arcLen * (1 - Math.max(0, Math.min(1, needle.value / max))),
+  }));
+
+  const needleStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${gaugeDegFor(needle.value, max) - 270}deg` }],
+  }));
+
+  const peakDot = peak > 0.5 && peak <= max ? polar(cx, cy, g.ring + size * 0.026, gaugeDegFor(peak, max)) : null;
+  const dash = `${g.arcLen} ${g.circumference}`;
+
+  return (
+    <>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <G rotation={START} origin={`${cx}, ${cy}`}>
+          {/* Resplandor y trazo del tramo recorrido */}
+          <AnimatedCircle
+            cx={cx}
+            cy={cy}
+            r={g.ring}
+            stroke={tint}
+            strokeOpacity={0.16}
+            strokeWidth={size * 0.03}
+            strokeDasharray={dash}
+            animatedProps={trail}
+            fill="none"
+          />
+          <AnimatedCircle
+            cx={cx}
+            cy={cy}
+            r={g.ring}
+            stroke={tint}
+            strokeOpacity={0.9}
+            strokeWidth={size * 0.007}
+            strokeDasharray={dash}
+            animatedProps={trail}
+            fill="none"
+          />
+        </G>
+        {numbers.map((v) => (
+          <ScaleNumber key={v} g={g} max={max} v={v} needle={needle} />
+        ))}
+        {peakDot && <Circle cx={peakDot.x} cy={peakDot.y} r={size * 0.008} fill={colors.text} fillOpacity={0.85} />}
+      </Svg>
+
+      {/* Aguja: corta, cruza el aro. Se dibuja apuntando arriba y se gira entera. */}
+      <Animated.View style={[StyleSheet.absoluteFill, needleStyle]} pointerEvents="none">
+        <View
+          style={[
+            styles.needleGlow,
+            {
+              left: cx - size * 0.016,
+              top: cy - g.ring - size * 0.04,
+              width: size * 0.032,
+              height: size * 0.1,
+              backgroundColor: tint,
+              shadowColor: tint,
+            },
+          ]}
+        />
+        <View
+          style={[
+            styles.needle,
+            {
+              left: cx - size * 0.006,
+              top: cy - g.ring - size * 0.036,
+              width: size * 0.012,
+              height: size * 0.092,
+              backgroundColor: tint,
+            },
+          ]}
+        />
+      </Animated.View>
+    </>
+  );
+});
+
+/** Cifra de la escala: se enciende cuando la aguja la pasa. */
+function ScaleNumber({ g, max, v, needle }: { g: Geometry; max: number; v: number; needle: SharedValue<number> }) {
+  const p = polar(g.cx, g.cy, g.numbers, gaugeDegFor(v, max));
+  const step = scaleSteps(max).major;
+  const props = useAnimatedProps(() => {
+    // Transición suave en el último medio tramo antes de la cifra.
+    const t = Math.max(0, Math.min(1, (needle.value - (v - step * 0.5)) / (step * 0.5)));
+    return { fillOpacity: 0.42 + t * 0.58 };
+  });
+  return (
+    <AnimatedSvgText
+      x={p.x}
+      y={p.y + g.size * 0.015}
+      fill={colors.text}
+      animatedProps={props}
+      fontSize={g.size * 0.044}
+      fontFamily={fonts.regular}
+      textAnchor="middle"
+    >
+      {String(Math.round(v))}
+    </AnimatedSvgText>
+  );
+}
+
+/**
+ * La cifra grande. Lee la velocidad animada desde el hilo de interfaz y solo
+ * avisa a React cuando cambia el número entero: un render por km/h, no uno
+ * por cuadro.
+ */
+function SpeedDigits({
+  speed,
+  initial,
+  size,
+  overLimit,
+}: {
+  speed: SharedValue<number>;
+  initial: number;
+  size: number;
+  overLimit: boolean;
+}) {
+  const [n, setN] = useState(initial);
+  useAnimatedReaction(
+    () => Math.round(speed.value),
+    (curr, prev) => {
+      if (curr !== prev) scheduleOnRN(setN, curr);
+    }
+  );
+  return (
+    <Text
+      style={[styles.digits, { fontSize: size * 0.165, lineHeight: size * 0.19, color: overLimit ? colors.danger : colors.text }]}
+      allowFontScaling={false}
+      numberOfLines={1}
+    >
+      {n}
+    </Text>
+  );
+}
+
 const styles = StyleSheet.create({
-  center: { alignItems: 'center', justifyContent: 'center' },
-  caption: { fontFamily: fonts.medium, letterSpacing: 0.3 },
-  value: {
-    fontFamily: fonts.semiboldItalic,
-    letterSpacing: -1,
-    includeFontPadding: false,
-    textAlign: 'center',
-    minWidth: '40%',
-    textShadowOffset: { width: 0, height: 0 },
+  center: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'flex-end' },
+  readout: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  digits: { fontFamily: fonts.light, letterSpacing: -0.5, textAlign: 'center', minWidth: '30%' },
+  unit: { fontFamily: fonts.regular, color: colors.textMuted, letterSpacing: 1, marginTop: -2 },
+  needle: { position: 'absolute', borderRadius: 999 },
+  needleGlow: {
+    position: 'absolute',
+    borderRadius: 999,
+    opacity: 0.35,
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
   },
-  unit: { color: colors.textMuted, fontFamily: fonts.medium, letterSpacing: 0.5 },
 });
 
 export const Speedometer = memo(SpeedometerBase);

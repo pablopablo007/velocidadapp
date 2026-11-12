@@ -5,7 +5,9 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CarHero } from '@/components/CarHero';
+import * as ImagePicker from 'expo-image-picker';
 import { CarPhotos, NO_PHOTOS, loadCarPhotos } from '@/services/carPhotos';
+import { clearMainPhoto, setMainPhoto, useMainPhoto } from '@/services/mainPhoto';
 
 import {
   Badge,
@@ -54,6 +56,34 @@ export default function GarageScreen() {
   );
 
   const v = settings.vehicle;
+  const mainPhoto = useMainPhoto(v.id);
+
+  // Foto principal: la del centro del velocímetro y del análisis.
+  const chooseMainPhoto = async () => {
+    const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permiso.granted) {
+      Alert.alert('Sin acceso a Fotos', 'Actívalo en Ajustes › Privacidad › Fotos para elegir la foto de tu carro.');
+      return;
+    }
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+    if (r.canceled || !r.assets?.[0]) return;
+    try {
+      await setMainPhoto(v.id, r.assets[0].uri);
+    } catch {
+      Alert.alert('No se pudo guardar la foto', 'Prueba con otra imagen.');
+    }
+  };
+  const mainPhotoOptions = () => {
+    if (!mainPhoto.custom) {
+      chooseMainPhoto().catch(() => {});
+      return;
+    }
+    Alert.alert('Foto principal', 'Se ve en el centro del velocímetro y en el análisis.', [
+      { text: 'Elegir otra', onPress: () => chooseMainPhoto().catch(() => {}) },
+      { text: 'Volver a la de fábrica', style: 'destructive', onPress: () => clearMainPhoto(v.id).catch(() => {}) },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
   const { switchVehicle } = useVehicleSwitch();
 
   const { baro } = useSensors();
@@ -437,10 +467,23 @@ export default function GarageScreen() {
         />
         <Divider />
         <Row
-          label="Fotos del carro"
+          label="Foto principal"
+          hint={
+            mainPhoto.custom
+              ? 'Tu foto · toca para cambiarla'
+              : mainPhoto.source
+                ? 'De fábrica · mejor trasera, centrada y con fondo oscuro'
+                : 'Sin foto: se ve un dibujo · elige una trasera con fondo oscuro'
+          }
+          icon="image-outline"
+          onPress={mainPhotoOptions}
+        />
+        <Divider />
+        <Row
+          label="Fotos para girar en 360°"
           hint={
             photos.frames.length === 0
-              ? 'Sin fotos: se muestra la ilustración'
+              ? 'Sin fotos: la tarjeta muestra la foto principal'
               : `${photos.frames.length} fotos guardadas`
           }
           icon="camera-outline"

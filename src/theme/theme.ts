@@ -21,11 +21,6 @@ export const colors = {
 
   // El color de acento depende del vehículo: se lee con useAccent() (theme/accent.tsx).
   blue: '#8AB4F8',
-  // Azul eléctrico: el mapa, la ruta y el tablero en horizontal.
-  electric: '#3D8BFF',
-  electricSoft: '#7FB2FF',
-  electricDim: 'rgba(61,139,255,0.14)',
-  electricGlow: 'rgba(61,139,255,0.55)',
   lime: '#8BE3A0', // "bien": marcas logradas, GPS preciso, sensor activo
   amber: '#FFD27F',
   salmon: '#FFA49A',
@@ -66,9 +61,6 @@ export const fonts = {
   medium: 'ChakraPetch_500Medium',
   semibold: 'ChakraPetch_600SemiBold',
   bold: 'ChakraPetch_700Bold',
-  // Cursivas: el nombre del carro y la cifra grande del velocímetro.
-  semiboldItalic: 'ChakraPetch_600SemiBold_Italic',
-  boldItalic: 'ChakraPetch_700Bold_Italic',
 } as const;
 
 /** Cifras pequeñas (precisión, presión, coordenadas). */

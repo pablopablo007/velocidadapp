@@ -1,4 +1,4 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/js-tabs';
@@ -16,11 +16,13 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CarShowcase } from '@/components/CarShowcase';
-import { DashClock, InfoCell, Panel, StatCard, TripControl } from '@/components/dash';
-import { MiniMap } from '@/components/MiniMap';
+import { CarPhoto } from '@/components/CarPhoto';
+import { Clock, GpsBars, IconButton, LimitSign, Readout } from '@/components/cockpit';
+import { TripControl } from '@/components/dash';
+import { MapBackdrop } from '@/components/MapBackdrop';
 import { SpeedRibbon } from '@/components/SpeedRibbon';
 import { Speedometer } from '@/components/Speedometer';
 import { Badge, EmptyState, GlassCard, PrimaryButton, SectionTitle, StatGrid, StatTile } from '@/components/ui';
@@ -32,17 +34,18 @@ import { FACTORY_VEHICLES } from '@/vehicles';
 import { TAB_BAR_HIDDEN, TAB_BAR_STYLE } from '@/theme/tabBar';
 import { colors, font, fonts, gradeColor, mono, radius, spacing } from '@/theme/theme';
 import { useAccent } from '@/theme/accent';
-import { AccelRing } from '@/components/AccelRing';
-import { LiveCar } from '@/components/LiveCar';
 import { altitudeEffect, compare0100, pressureAltitudeM } from '@/utils/altitude';
 import {
   formatAccel,
   formatDistance,
   formatDuration,
   formatNumber,
+  distanceUnitLabel,
   speedUnitLabel,
+  toDisplayDistanceKm,
   toDisplaySpeed,
 } from '@/utils/format';
+import { getTotals } from '@/services/database';
 import { cardinal } from '@/utils/geo';
 
 /**
@@ -66,9 +69,10 @@ export default function SpeedScreen() {
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
 
-  const { settings } = useSettings();
+  const { settings, update } = useSettings();
   const sensors = useSensors();
-  const { status, permission, gpsActive, live, trip, path, position, overLimit, requestPermission } = useTracking();
+  const { status, permission, gpsActive, live, trip, path, position, overLimit, requestPermission, lastSavedTripId } =
+    useTracking();
 
   // En horizontal el tablero va a pantalla completa.
   useEffect(() => {
@@ -122,6 +126,18 @@ export default function SpeedScreen() {
     if (diff >= 2) setCourse(live.heading);
   }
 
+  // ---- Odómetro del carro: lo recorrido con él en la app (historial + viaje en curso) ----
+  const [odometerM, setOdometerM] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    getTotals(settings.activeVehicleId)
+      .then((t) => alive && setOdometerM(t.distanceM))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [settings.activeVehicleId, lastSavedTripId]);
+
   // ---- Paginado horizontal ----
   const pager = useRef<ScrollViewInstance>(null);
   const [page, setPage] = useState(0);
@@ -168,15 +184,6 @@ export default function SpeedScreen() {
   }
 
   const accuracy = live.accuracy;
-  const gps =
-    !gpsActive || accuracy == null
-      ? { label: 'buscando GPS', tint: colors.textMuted }
-      : accuracy <= 8
-        ? { label: 'GPS preciso', tint: colors.lime }
-        : accuracy <= 20
-          ? { label: 'GPS medio', tint: colors.amber }
-          : { label: 'GPS débil', tint: colors.danger };
-
   // ---- Calidad de la medición: qué tan fiable es lo que se muestra ahora ----
   const compassAcc = sensors.compass.accuracyDeg;
   const calItems = [
@@ -217,75 +224,70 @@ export default function SpeedScreen() {
   const padH = landscape ? Math.max(insets.left, insets.right, spacing.lg) : spacing.lg;
   const usableW = width - padH * 2;
   const bottomSpace = landscape ? Math.max(insets.bottom, spacing.sm) : tabBarHeight;
-  const GAP = spacing.sm;
 
-  // Vertical: todo lo que no es dial ni mapa tiene alto fijo; el dial toma lo
-  // que queda después de reservarle un mínimo al mapa.
-  const P = { clock: 18, title: 36, cards: 126, info: 46, trip: 44, dots: 6, mapMin: 118 };
-  const innerH = height - (insets.top + spacing.xs) - (bottomSpace + spacing.sm);
-  const portraitFixed = P.clock + P.title + P.cards + P.info + P.trip + P.dots + GAP * 7;
-  // El aro deja libre el 12 % inferior del cuadro: la fila siguiente se mete ahí.
-  const DIAL_VISIBLE = 0.88;
+  // Vertical: barra superior, mapa (se mete bajo el dial), dial, datos y viaje.
+  const P = { bar: 30, stats: 46, extra: 18, trip: 40, dots: 8 };
+  const innerH = height - insets.top - bottomSpace;
   const portraitDial = Math.max(
-    200,
-    Math.min(usableW - 24, 330, (innerH - portraitFixed - P.mapMin) / DIAL_VISIBLE)
+    220,
+    Math.min(usableW, 360, innerH - P.bar - P.stats - P.extra - P.trip - P.dots - 150)
+  );
+  // El mapa ocupa lo que sobra arriba y se mete un poco bajo el dial.
+  const MAP_UNDER = 0.2;
+  const portraitMapH = Math.max(
+    150,
+    innerH - P.bar - portraitDial * (1 - MAP_UNDER) - P.stats - P.extra - P.trip - P.dots - spacing.sm * 4
   );
 
-  // Horizontal: cabecera arriba, fila de datos abajo y el dial ocupa el alto que queda.
-  const L = { header: 30, bottom: 46 };
-  const landscapeMainH = height - spacing.sm - bottomSpace - L.header - L.bottom - GAP * 2;
-  const landscapeDial = Math.max(180, Math.min(landscapeMainH, usableW * 0.4));
+  const portraitMapTotal = insets.top + P.bar + portraitMapH + portraitDial * MAP_UNDER;
 
+  // Horizontal: barra arriba, barra abajo; el dial toma todo el alto que queda.
+  const L = { bar: 30, bottom: 40 };
+  const landscapeMainH = height - spacing.xs - bottomSpace - L.bar - L.bottom - spacing.xs * 2;
+  const landscapeDial = Math.max(200, Math.min(landscapeMainH, usableW * 0.46));
   const dialSize = landscape ? landscapeDial : portraitDial;
-  // En horizontal el tablero es azul; en vertical lleva el color del carro.
-  const dialTint = landscape ? colors.electric : accent.accent;
 
   const switchCar = (e: GestureResponderEvent) =>
     switchVehicle(nextVehicleId, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
 
   // ---------------------------------------------------------------- piezas
-  const gpsChip = (
-    <View style={styles.gpsChip}>
-      <View style={[styles.dot, { backgroundColor: gps.tint }]} />
-      <Text style={[styles.gpsText, { color: gps.tint }]}>{gps.label}</Text>
-      {accuracy != null && <Text style={styles.gpsDim}>±{Math.round(accuracy)} m</Text>}
-    </View>
-  );
-
-  // Nombre del carro: la primera palabra en blanco y el resto en su color.
-  const [modelHead, ...modelRest] = vehicle.model.split(' ');
-  const title = (compact: boolean) => (
-    <Text
-      style={[styles.title, compact && styles.titleCompact]}
-      numberOfLines={1}
-      adjustsFontSizeToFit
-      minimumFontScale={0.7}
-    >
-      {modelHead}
-      {modelRest.length > 0 && <Text style={{ color: accent.accent }}> {modelRest.join(' ')}</Text>}
-    </Text>
-  );
-  const steerButton = (
+  const wordmark = (
     <Pressable
       onPress={switchCar}
-      hitSlop={10}
-      style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}
+      hitSlop={12}
+      style={styles.wordmarkBtn}
       accessibilityRole="button"
       accessibilityLabel={`Cambiar de vehículo. Ahora: ${vehicle.model}`}
     >
-      <MaterialCommunityIcons name="steering" size={20} color={colors.textMuted} />
+      <Text style={styles.wordmark} numberOfLines={1}>
+        {vehicle.model.toUpperCase()}
+      </Text>
+      <Ionicons name="swap-horizontal" size={11} color={colors.textFaint} />
     </Pressable>
   );
-  const gearButton = (
-    <Pressable
-      onPress={() => router.push('/garage')}
-      hitSlop={10}
-      style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}
-      accessibilityRole="button"
-      accessibilityLabel="Garaje y ajustes"
-    >
-      <Ionicons name="settings-outline" size={18} color={colors.textMuted} />
-    </Pressable>
+
+  const topBar = (
+    <View style={[styles.topBar, { height: landscape ? L.bar : P.bar }]}>
+      <View style={styles.topSide}>
+        <Clock />
+        {heading.deg != null && (
+          <Text style={styles.topDim}>
+            {cardinal(heading.deg)} {Math.round(heading.deg)}°
+          </Text>
+        )}
+      </View>
+      {wordmark}
+      <View style={[styles.topSide, styles.topRight]}>
+        {status !== 'idle' && (
+          <View style={styles.recChip}>
+            <RecDot paused={status === 'paused'} color={accent.accent} />
+            {landscape && <Text style={styles.topDim}>{status === 'paused' ? 'pausa' : 'grabando'}</Text>}
+          </View>
+        )}
+        <GpsBars accuracy={gpsActive ? accuracy : null} />
+        <IconButton icon="settings-outline" label="Garaje y ajustes" onPress={() => router.push('/garage')} />
+      </View>
+    </View>
   );
 
   const dial = (
@@ -298,253 +300,128 @@ export default function SpeedScreen() {
       vehicleTop={toDisplaySpeed(vehicle.topSpeedKmh, unit)}
       overLimit={overLimit}
       size={dialSize}
-      tint={dialTint}
-      // En horizontal el carro va en el hueco de abajo: la cifra sube un poco.
-      centerShift={landscape ? -0.075 : -0.02}
-      caption={
-        overLimit && limitShown != null
-          ? `límite ${limitShown}`
-          : landscape && heading.deg != null
-            ? `${cardinal(heading.deg)} · ${Math.round(heading.deg)}°`
-            : 'velocidad'
-      }
+      tint={accent.accent}
+    >
+      <CarPhoto vehicleId={vehicle.id} bodyType={vehicle.bodyType} width={dialSize * 0.6} live />
+    </Speedometer>
+  );
+
+  const limitSign = (
+    <LimitSign
+      limitKmh={settings.speedLimit}
+      enabled={settings.speedAlertEnabled}
+      over={overLimit}
+      shownValue={toDisplaySpeed(settings.speedLimit, unit)}
+      haptics={settings.hapticsEnabled}
+      size={landscape ? 34 : 42}
+      showLabel={!landscape}
+      onChange={update}
     />
   );
 
-  const curveText = motionOk
-    ? `${lateralG < -0.03 ? '‹ ' : ''}${Math.abs(lateralG).toFixed(2)}${lateralG > 0.03 ? ' ›' : ''}`
-    : '—';
-
-  // Tarjeta del carro en vivo: se inclina, cabecea y enciende los frenos de verdad.
-  const carCard = (
-    <Pressable
-      onPress={() => goTo(1)}
-      style={[styles.carCard, { borderColor: `${accent.accent}40` }]}
-      accessibilityRole="button"
-      accessibilityLabel="Tu carro en vivo. Toca para ver el análisis"
-    >
-      <LinearGradient
-        colors={[accent.accentDim, 'rgba(10,10,11,0)']}
-        start={{ x: 0, y: 1 }}
-        end={{ x: 0.9, y: 0 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-      {/* Haces de luz en diagonal, del color del carro */}
-      <View style={[styles.beam, { backgroundColor: accent.accent, left: '-8%', transform: [{ rotate: '-52deg' }] }]} />
-      <View style={[styles.beam, { backgroundColor: accent.accent, right: '-8%', transform: [{ rotate: '52deg' }] }]} />
-      <View style={styles.carStage} pointerEvents="none">
-        <LiveCar size={P.cards + 50} bodyType={vehicle.bodyType} lateralG={lateralG} active={motionOk} bare />
-      </View>
-      <View style={styles.carReadout} pointerEvents="none">
-        <Text style={styles.carLabel}>Curva</Text>
-        <Text style={styles.carValue}>
-          {curveText}
-          <Text style={styles.carUnit}> g</Text>
-        </Text>
-      </View>
-    </Pressable>
+  const odometerKm = toDisplayDistanceKm((odometerM + (trip?.distanceM ?? 0)) / 1000, unit);
+  const odometer = (
+    <View style={styles.odometer}>
+      <Text style={styles.odoValue}>
+        {formatNumber(odometerKm, odometerKm < 100 ? 1 : 0)}
+        <Text style={styles.odoUnit}> {distanceUnitLabel(unit)}</Text>
+      </Text>
+      <Text style={styles.odoLabel}>total con este carro</Text>
+    </View>
   );
 
-  const statCards = (large: boolean) => (
+  const readouts = (
     <>
-      <StatCard
-        icon="location"
-        label="Distancia"
-        value={formatDistance(shown.distanceM, unit)}
-        tint={colors.electricSoft}
-        glow={landscape ? colors.electric : accent.accent}
-        large={large}
-      />
-      <StatCard
-        icon="time-outline"
-        label={trip ? 'Tiempo de viaje' : 'Sesión'}
-        value={formatDuration(shown.durationMs)}
-        tint={colors.textMuted}
-        glow={landscape ? colors.electric : accent.accent}
-        large={large}
-      />
-      <StatCard
-        icon="speedometer"
-        label="Máxima"
-        value={formatNumber(toDisplaySpeed(shown.maxSpeedKmh, unit))}
-        unit={unitLabel}
-        tint={accent.accent}
-        large={large}
-      />
+      <Readout label={trip ? 'viaje' : 'sesión'} value={formatDistance(shown.distanceM, unit)} delay={150} />
+      <Readout label="tiempo" value={formatDuration(shown.durationMs)} delay={230} />
+      <Readout label="media" value={formatNumber(toDisplaySpeed(shown.avgMovingKmh, unit))} unit={unitLabel} delay={310} />
+      <Readout label="máxima" value={formatNumber(toDisplaySpeed(shown.maxSpeedKmh, unit))} unit={unitLabel} delay={390} />
     </>
   );
 
-  const miniMap = (
-    <MiniMap
+  // Fuerzas medidas, en una línea discreta: el carro de la foto ya las muestra moviéndose.
+  const forces = (
+    <Text style={styles.forces} numberOfLines={1}>
+      {motionOk ? `curva ${Math.abs(lateralG).toFixed(2)} g` : 'curva —'}
+      {'   ·   '}
+      {`${longG >= 0 ? 'acelera' : 'frena'} ${Math.abs(longG).toFixed(2)} g${longCalibrated || !motionOk ? '' : ' (gps)'}`}
+      {'   ·   '}
+      {`pendiente ${grade >= 0 ? '+' : ''}${grade.toFixed(1)} %`}
+    </Text>
+  );
+
+  const map = (style: object, fades: object, arrow: { x: number; y: number }) => (
+    <MapBackdrop
       position={position}
       heading={course}
       path={path}
-      accuracy={gpsActive ? accuracy : null}
-      tint={colors.electric}
-      edge={landscape ? colors.electric : accent.accent}
+      tint={accent.accent}
+      fades={fades}
+      arrow={arrow}
       onPress={() => router.push('/map')}
-      style={landscape ? styles.mapLandscape : styles.mapPortrait}
+      style={style}
     />
   );
 
-  const accelState = longG > 0.03 ? 'acelera' : longG < -0.03 ? 'frena' : null;
-  const infoRow = (
-    <Panel style={[styles.infoRow, { height: landscape ? L.bottom : P.info }]}>
-      <InfoCell
-        lead={<AccelRing size={30} longG={longG} calibrated={longCalibrated} compact />}
-        label={accelState ? `Aceleración · ${accelState}` : 'Aceleración'}
-        value={`${longG >= 0 ? '+' : '−'}${Math.abs(longG).toFixed(2)} g`}
-        tint={accelState === 'acelera' ? dialTint : accelState === 'frena' ? colors.danger : colors.text}
-      />
-      <View style={styles.vDivider} />
-      <InfoCell
-        lead={
-          <Ionicons
-            name={grade > 0.8 ? 'trending-up' : grade < -0.8 ? 'trending-down' : 'remove'}
-            size={18}
-            color={gradeColor(grade)}
-          />
-        }
-        label="Pendiente"
-        value={`${grade >= 0 ? '+' : ''}${grade.toFixed(1)} %`}
-        tint={gradeColor(grade) === colors.textMuted ? colors.text : gradeColor(grade)}
-      />
-      <View style={styles.vDivider} />
-      <InfoCell
-        lead={<Ionicons name="cloud-outline" size={18} color={colors.electricSoft} />}
-        label={sensors.baro.status === 'activo' ? 'Presión (barómetro)' : 'Presión'}
-        value={pressureHpa != null ? `${Math.round(pressureHpa)} hPa` : '—'}
-        tint={colors.electricSoft}
-      />
-    </Panel>
-  );
-
-  // Dos puntos: esta página y la de análisis (se desliza de lado).
-  const pageDots = (
-    <Pressable onPress={() => goTo(1)} hitSlop={10} style={styles.dots} accessibilityLabel="Ir al análisis">
-      <View style={[styles.pageDot, { backgroundColor: accent.accent, width: 14 }]} />
-      <View style={styles.pageDot} />
-    </Pressable>
-  );
-
   const cockpit = landscape ? (
-    <View style={[styles.page, { width, gap: GAP, paddingTop: spacing.sm, paddingBottom: bottomSpace, paddingHorizontal: padH }]}>
-      {/* Ambiente azul: luz que baja desde arriba y dos haces hacia el dial */}
-      <LinearGradient
-        colors={['rgba(61,139,255,0.20)', 'rgba(61,139,255,0)']}
-        style={[styles.ambient, { height: height * 0.55 }]}
-        pointerEvents="none"
-      />
-      <LinearGradient
-        colors={['rgba(61,139,255,0)', colors.electric, 'rgba(61,139,255,0)']}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={[styles.ambientLine, { top: spacing.sm + L.header + GAP / 2 }]}
-        pointerEvents="none"
-      />
-      <View style={[styles.headerRow, { height: L.header }]}>
-        {steerButton}
-        <DashClock />
-        <View style={styles.headerFill}>{title(true)}</View>
-        {gpsChip}
-        {gearButton}
-      </View>
+    <View style={[styles.page, { width, paddingTop: spacing.xs, paddingBottom: bottomSpace }]}>
+      {/* El mapa va de borde a borde por la izquierda y se apaga hacia el dial */}
+      {map(
+        { position: 'absolute', left: 0, top: 0, bottom: 0, width: width - padH - dialSize * 0.62 },
+        { top: 0.24, bottom: 0.3, left: 0.06, right: 0.42 },
+        { x: 0.46, y: 0.6 }
+      )}
+      <View style={{ paddingHorizontal: padH }}>{topBar}</View>
 
-      <View style={styles.landscapeMain}>
-        {miniMap}
-        <View style={{ width: dialSize, height: dialSize }}>
-          {/* Resplandor azul detrás del dial */}
-          <View style={[styles.dialGlow, { shadowColor: colors.electric, backgroundColor: colors.electricDim }]} />
+      <View style={[styles.landscapeMain, { paddingRight: padH }]}>
+        <Animated.View entering={FadeIn.duration(600)} style={{ width: dialSize, height: dialSize }}>
           {dial}
-          {/* El carro, en el hueco inferior del aro */}
-          <View style={[styles.dialCar, { bottom: -dialSize * 0.035 }]} pointerEvents="none">
-            <LiveCar
-              size={dialSize * 0.44}
-              bodyType={vehicle.bodyType}
-              lateralG={lateralG}
-              active={motionOk}
-              tint={colors.electric}
-              bare
-            />
-          </View>
-        </View>
-        <View style={styles.landscapeStats}>{statCards(true)}</View>
+        </Animated.View>
       </View>
 
-      <View style={[styles.landscapeBottom, { height: L.bottom }]}>
-        <View style={{ flex: 1.55 }}>{infoRow}</View>
-        <View style={{ flex: 1, justifyContent: 'center' }}>
+      <View style={[styles.landscapeBottom, { height: L.bottom, paddingHorizontal: padH }]}>
+        {odometer}
+        <View style={styles.landscapeReadouts}>{readouts}</View>
+        {limitSign}
+        <View style={{ width: 200 }}>
           <TripControl compact />
         </View>
       </View>
     </View>
   ) : (
-    <View
-      style={[
-        styles.page,
-        { width, gap: GAP, paddingTop: insets.top + spacing.xs, paddingBottom: bottomSpace + spacing.sm, paddingHorizontal: padH },
-      ]}
-    >
-      {/* Ambiente del color del carro: luz desde arriba y dos haces a los lados del dial */}
-      <LinearGradient
-        colors={[`${accent.accent}2E`, `${accent.accent}00`]}
-        style={[styles.ambient, { height: insets.top + P.clock + P.title + dialSize * 0.6 }]}
-        pointerEvents="none"
-      />
-      {[-1, 1].map((side) => (
-        <LinearGradient
-          key={side}
-          colors={[`${accent.accent}00`, `${accent.accent}B0`, `${accent.accent}00`]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          pointerEvents="none"
-          style={[
-            styles.streak,
-            {
-              top: insets.top + P.clock + P.title + GAP * 2 + dialSize * 0.72,
-              width: width * 0.5,
-              [side < 0 ? 'left' : 'right']: -width * 0.2,
-              transform: [{ rotate: `${side * 34}deg` }],
-            },
-          ]}
-        />
-      ))}
-      <View style={[styles.headerRow, { height: P.clock }]}>
-        <DashClock />
-        <View style={styles.headerFill} />
-        {gpsChip}
+    <View style={[styles.page, { width, paddingTop: insets.top, paddingBottom: bottomSpace + spacing.xs }]}>
+      {/* El mapa ocupa la parte de arriba de borde a borde y se apaga hacia el dial */}
+      {map(
+        { position: 'absolute', left: 0, right: 0, top: 0, height: portraitMapTotal },
+        { top: 0.22, bottom: 0.4, left: 0.04, right: 0.04 },
+        // La flecha, a media altura de la parte que se ve (sobre el dial).
+        { x: 0.5, y: (insets.top + P.bar + portraitMapH * 0.52) / portraitMapTotal }
+      )}
+      <View style={{ paddingHorizontal: padH }}>{topBar}</View>
+      <View style={{ height: portraitMapH }} pointerEvents="box-none" />
+
+      <Animated.View
+        entering={FadeIn.duration(600)}
+        style={[styles.dialWrap, { width: dialSize, height: dialSize, marginTop: -portraitDial * MAP_UNDER }]}
+      >
+        {dial}
+      </Animated.View>
+
+      <View style={[styles.dialFooter, { paddingHorizontal: padH }]}>
+        {odometer}
+        <View style={{ flex: 1 }} />
+        {limitSign}
       </View>
 
-      <View style={[styles.headerRow, { height: P.title }]}>
-        {steerButton}
-        <View style={styles.titleBlock}>
-          {title(false)}
-          <LinearGradient
-            colors={[accent.accent, `${accent.accent}00`]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.titleLine}
-          />
-        </View>
-        {gearButton}
-      </View>
-
-      <View style={[styles.centered, { height: dialSize * DIAL_VISIBLE }]}>
-        <View style={{ width: dialSize, height: dialSize, marginTop: dialSize * (1 - DIAL_VISIBLE) }}>{dial}</View>
-      </View>
-
-      <View style={[styles.cardsRow, { height: P.cards }]}>
-        {carCard}
-        <View style={styles.statsCol}>{statCards(false)}</View>
-      </View>
-
-      {miniMap}
-      {infoRow}
-      <View style={{ height: P.trip, justifyContent: 'center' }}>
+      <View style={[styles.portraitReadouts, { height: P.stats, paddingHorizontal: padH }]}>{readouts}</View>
+      <View style={{ height: P.extra, paddingHorizontal: padH }}>{forces}</View>
+      <View style={{ height: P.trip, justifyContent: 'center', paddingHorizontal: padH }}>
         <TripControl />
       </View>
-      {pageDots}
+      <Pressable onPress={() => goTo(1)} hitSlop={10} style={styles.dots} accessibilityLabel="Ir al análisis">
+        <View style={[styles.pageDot, styles.pageDotOn]} />
+        <View style={styles.pageDot} />
+      </Pressable>
     </View>
   );
 
@@ -570,7 +447,9 @@ export default function SpeedScreen() {
         </Text>
       </View>
 
-      <CarShowcase height={landscape ? 150 : 190} bodyType={vehicle.bodyType} />
+      <View style={styles.analysisPhoto}>
+        <CarPhoto vehicleId={vehicle.id} bodyType={vehicle.bodyType} width={Math.min(usableW, landscape ? 380 : 420)} />
+      </View>
       <Text style={styles.carName}>
         {vehicle.model} {vehicle.year}
       </Text>
@@ -892,7 +771,7 @@ export default function SpeedScreen() {
       {/* Exceso de velocidad: marco rojo y resplandor arriba, visibles de reojo */}
       {overLimit && (
         <>
-          <LinearGradient colors={['rgba(255,45,70,0.30)', 'transparent']} style={styles.alertGlow} pointerEvents="none" />
+          <LinearGradient colors={['rgba(255,45,70,0.14)', 'transparent']} style={styles.alertGlow} pointerEvents="none" />
           <View style={styles.alertFrame} pointerEvents="none" />
         </>
       )}
@@ -904,6 +783,16 @@ export default function SpeedScreen() {
       )}
     </View>
   );
+}
+
+/** Punto de grabación: late despacio mientras se graba, quieto en pausa. */
+function RecDot({ paused, color }: { paused: boolean; color: string }) {
+  const o = useSharedValue(1);
+  useEffect(() => {
+    o.set(paused ? withTiming(0.5) : withRepeat(withTiming(0.25, { duration: 900 }), -1, true));
+  }, [paused, o]);
+  const style = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View style={[styles.recDot, { backgroundColor: paused ? colors.textMuted : color }, style]} />;
 }
 
 function SensorRow({ name, detail, status }: { name: string; detail: string; status: SensorStatus }) {
@@ -925,98 +814,53 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   centered: { alignItems: 'center', justifyContent: 'center' },
   // Recortada: los haces de luz sobresalen y no deben asomar en la página de al lado.
-  page: { flex: 1, gap: spacing.md, overflow: 'hidden' },
+  page: { flex: 1, overflow: 'hidden' },
 
   alertGlow: { position: 'absolute', top: 0, left: 0, right: 0, height: 180 },
   alertFrame: {
     ...StyleSheet.absoluteFill,
-    borderWidth: 3,
-    borderColor: colors.danger,
+    borderWidth: 2,
+    borderColor: 'rgba(255,45,70,0.7)',
     borderRadius: 52, // sigue las esquinas redondeadas de la pantalla del iPhone
   },
 
-  // ----- ambiente -----
-  ambient: { position: 'absolute', left: 0, right: 0, top: 0 },
-  ambientLine: { position: 'absolute', left: '18%', right: '18%', height: 1, opacity: 0.55 },
-  streak: { position: 'absolute', height: 1.5, opacity: 0.5 },
-
-  // ----- cabecera -----
   pressed: { opacity: 0.55 },
 
-  // ----- cabecera -----
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  headerFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  gpsChip: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  gpsText: { fontSize: 11, fontFamily: fonts.medium },
-  gpsDim: { fontSize: 11, color: colors.textFaint, fontFamily: mono },
+  // ----- barra superior -----
+  topBar: { flexDirection: 'row', alignItems: 'center' },
+  topSide: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  topRight: { justifyContent: 'flex-end', gap: spacing.sm },
+  topDim: { fontSize: 11, color: colors.textMuted, fontFamily: fonts.medium, letterSpacing: 0.8 },
+  wordmarkBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  wordmark: { fontFamily: fonts.semibold, fontSize: 12, letterSpacing: 3.2, color: colors.text },
+  recChip: { flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 4 },
+  recDot: { width: 6, height: 6, borderRadius: 3 },
   dot: { width: 7, height: 7, borderRadius: 4 },
-  roundButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  titleBlock: { flex: 1, justifyContent: 'center' },
-  title: { fontFamily: fonts.boldItalic, fontSize: 25, lineHeight: 29, color: colors.text, letterSpacing: 0.3 },
-  titleCompact: { fontSize: 18, lineHeight: 22, textAlign: 'center' },
-  titleLine: { height: 2, borderRadius: 1, marginTop: 1 },
 
   // ----- vertical -----
-  cardsRow: { flexDirection: 'row', gap: spacing.sm },
-  carCard: {
-    flex: 1.12,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-  },
-  beam: { position: 'absolute', top: '18%', width: '62%', height: 1.5, opacity: 0.35 },
-  carStage: { position: 'absolute', left: 0, right: 0, top: -38, alignItems: 'center' },
-  carReadout: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 5,
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  carLabel: { fontSize: 11, color: colors.textMuted, fontFamily: fonts.medium, letterSpacing: 0.3 },
-  carValue: { fontSize: 18, lineHeight: 22, fontFamily: fonts.medium, color: colors.text },
-  carUnit: { fontSize: 11, fontFamily: fonts.regular, color: colors.textMuted },
-  statsCol: { flex: 1, gap: 6 },
-  mapPortrait: { flex: 1, minHeight: 90 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.xs },
-  vDivider: { width: 1, alignSelf: 'stretch', marginVertical: spacing.sm, backgroundColor: colors.border },
-  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, height: 6 },
-  pageDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.textFaint },
+  dialWrap: { alignSelf: 'center' },
+  dialFooter: { flexDirection: 'row', alignItems: 'flex-end', marginTop: -50, height: 56 },
+  portraitReadouts: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm },
+  forces: { fontSize: 10.5, color: colors.textFaint, fontFamily: fonts.medium, textAlign: 'center', letterSpacing: 0.4 },
+  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, height: 8 },
+  pageDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.textFaint },
+  pageDotOn: { width: 12, backgroundColor: colors.textMuted },
+
+  odometer: { minWidth: 92 },
+  odoValue: { fontFamily: fonts.regular, fontSize: 14, color: colors.text, letterSpacing: 0.3 },
+  odoUnit: { fontSize: 10, color: colors.textMuted },
+  odoLabel: { fontSize: 9, color: colors.textMuted, fontFamily: fonts.medium, letterSpacing: 0.4, marginTop: 1 },
 
   // ----- horizontal -----
-  landscapeMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  mapLandscape: { flex: 1, alignSelf: 'stretch' },
-  landscapeStats: { flex: 1, alignSelf: 'stretch', gap: spacing.sm },
-  dialGlow: {
-    position: 'absolute',
-    left: '18%',
-    right: '18%',
-    top: '18%',
-    bottom: '18%',
-    borderRadius: 999,
-    shadowOpacity: 0.9,
-    shadowRadius: 46,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  dialCar: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  landscapeBottom: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.md },
+  landscapeMain: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+  dialCornerRight: { position: 'absolute', right: -6, bottom: 4 },
+  landscapeBottom: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  landscapeReadouts: { flex: 1, flexDirection: 'row', alignItems: 'center' },
 
   floatingTrip: { position: 'absolute' },
 
   // ----- análisis -----
+  analysisPhoto: { alignItems: 'center', marginTop: spacing.sm },
   analysisHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
   backBtn: {
     width: 32,

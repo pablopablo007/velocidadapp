@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 
 import { LongitudinalEstimator } from '@/services/longitudinal';
 import { reportMotion, reportPressure } from '@/services/sensorHub';
-import { liveLatG, liveLongG, liveSpeedMs } from '@/state/liveMotion';
+import { liveLatG, liveLongG } from '@/state/liveMotion';
 import { useTracking } from '@/state/TrackingContext';
 
 /**
@@ -88,7 +88,6 @@ export function SensorsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const v = Math.max(0, live.speedKmh / 3.6);
     speedMs.current = v;
-    liveSpeedMs.set(v);
     estimator.current?.pushGps(Date.now(), v);
     if (latest.current.motion.status !== 'activo') {
       // Sin acelerómetro, el anillo sigue vivo con la aceleración del GPS.

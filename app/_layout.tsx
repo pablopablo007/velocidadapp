@@ -3,9 +3,7 @@ import {
   ChakraPetch_400Regular,
   ChakraPetch_500Medium,
   ChakraPetch_600SemiBold,
-  ChakraPetch_600SemiBold_Italic,
   ChakraPetch_700Bold,
-  ChakraPetch_700Bold_Italic,
   useFonts,
 } from '@expo-google-fonts/chakra-petch';
 import { Stack } from 'expo-router';
@@ -38,10 +36,8 @@ export default function RootLayout() {
     ChakraPetch_400Regular,
     ChakraPetch_500Medium,
     ChakraPetch_600SemiBold,
-    ChakraPetch_600SemiBold_Italic,
-    ChakraPetch_700Bold,
-    ChakraPetch_700Bold_Italic,
-  });
+      ChakraPetch_700Bold,
+    });
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});

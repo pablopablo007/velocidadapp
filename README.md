@@ -23,14 +23,17 @@ React Native + Expo SDK 58. Uso personal.
 marcha ni consumo, así que la app no los muestra ni los inventa. Lo que se calcula (la
 potencia según el aire) dice de qué medida sale.
 
-**Cabina** — Tablero digital en grafito, con el color de cada carro (rojo el Polo, blanco
-la Pick Up) y cifras en Chakra Petch. De arriba abajo: nombre del carro, dial con aro
-luminoso (se enciende hasta la velocidad actual, muesca roja en el límite, punto en la
-máxima de la sesión), tarjeta del carro en vivo (se inclina en curva, cabecea y enciende
-los frenos) junto a distancia, tiempo y máxima; mapa en miniatura que sigue al carro con el
-recorrido; fila de aceleración, pendiente y presión; y el control del viaje. **Al girar el
-iPhone** el tablero pasa a pantalla completa y se vuelve azul: mapa a la izquierda, dial al
-centro con el carro en el hueco inferior del aro y los datos del viaje a la derecha.
+**Cabina** — En el estilo de la cabina digital de Volkswagen: fondo negro, sin tarjetas ni
+bordes, blanco para los datos, gris para las etiquetas y el color del carro (rojo el Polo,
+blanco la Pick Up) solo en lo que está vivo. Velocímetro de aro fino con las cifras por fuera,
+aguja corta y el tramo recorrido iluminado; en el centro, la foto trasera del carro, que se
+recuesta en las curvas, cabecea y enciende las luces de freno con las fuerzas medidas. Al abrir
+la app la aguja hace un barrido completo, como al dar contacto. El mapa no va en un recuadro: se
+funde con el negro (arriba en vertical, a la izquierda en horizontal). Abajo: kilómetros totales
+con ese carro, distancia, tiempo, media y máxima, y la señal de límite, que se toca para pasar
+entre los límites de Ecuador (50, 60, 90, 100 o sin aviso). La aguja, el tramo iluminado y la foto
+se mueven en el hilo de interfaz con Reanimated, a los cuadros de la pantalla (120 por segundo en
+el iPhone 15 Pro).
 
 **Sensores del iPhone 15 Pro** —
 - *GPS L1 + L5*: velocidad Doppler (no restando posiciones), altitud, rumbo y traza.

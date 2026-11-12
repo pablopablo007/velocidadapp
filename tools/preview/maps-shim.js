@@ -3,8 +3,11 @@ const React = require('react');
 const { View } = require('react-native');
 const Svg = require('react-native-svg');
 
-const MapView = React.forwardRef(function MapView({ style, children }, ref) {
+const MapView = React.forwardRef(function MapView({ style, children, onMapReady }, ref) {
   React.useImperativeHandle(ref, () => ({ animateCamera() {}, animateToRegion() {}, setCamera() {} }));
+  React.useEffect(() => {
+    onMapReady && onMapReady();
+  }, []);
   const S = Svg.default;
   return React.createElement(
     View,

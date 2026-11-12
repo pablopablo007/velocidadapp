@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { CarShowcase } from '@/components/CarShowcase';
+import { CarPhoto } from '@/components/CarPhoto';
 import { CarSpinner } from '@/components/CarSpinner';
 import { colors, radius, spacing } from '@/theme/theme';
 import { Vehicle } from '@/vehicles/polo';
@@ -23,10 +23,11 @@ type Props = {
 
 /**
  * Tarjeta del carro. Con fotos propias tomadas alrededor del carro gira en
- * 360° al arrastrarla; sin ellas muestra el Polo Track (foto) o la Pick Up (dibujo) en 3D, que se
+ * 360° al arrastrarla; sin ellas muestra la foto principal del carro (la de fábrica o la que elijas), que se
  * inclina con el giroscopio.
  */
 function CarHeroBase({ vehicle, frames, driverName, onPressOptions }: Props) {
+  const [photoW, setPhotoW] = useState(0);
   const saludo = driverName ? `${greeting()}, ${driverName}` : greeting();
 
   return (
@@ -59,7 +60,9 @@ function CarHeroBase({ vehicle, frames, driverName, onPressOptions }: Props) {
           <CarSpinner frames={frames} height={200} />
         </View>
       ) : (
-        <CarShowcase height={220} bodyType={vehicle.bodyType} />
+        <View style={styles.photo} onLayout={(e) => setPhotoW(e.nativeEvent.layout.width)}>
+          {photoW > 0 && <CarPhoto vehicleId={vehicle.id} bodyType={vehicle.bodyType} width={photoW} />}
+        </View>
       )}
     </View>
   );
@@ -95,6 +98,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stage: { marginTop: spacing.md, height: 200 },
+  photo: { marginTop: spacing.sm, alignSelf: 'stretch' },
 });
 
 export const CarHero = memo(CarHeroBase);
